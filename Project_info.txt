@@ -1,0 +1,7 @@
+FREERTOS - tak
+SAI lub I2S - rejstracja dźwięku z mikrofonu  	
+MIKROFON - chyba na płytce					  	
+MICRO SD - SDIO  do zapisu na płytce koła elektronów 
+USER BUTTON - start/stop nagrywania
+LED RED/GREEN - sygnalizacja działania
+
