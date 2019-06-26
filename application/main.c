@@ -6,56 +6,92 @@
 #include "semphr.h"
 #include "queue.h"
 #include "string.h"
+#include "adc1.h"
 
 extern volatile int tick_counter;
 int executionTime = 0;
-SemaphoreHandle_t mySemaphore;
-SemaphoreHandle_t myMutex;
-QueueHandle_t myQueue;
 
-typedef struct {
-        GPIO_TypeDef* gpio;    // GPIO port
-        uint16_t      pin;     // GPIO pin
-        TickType_t    ticks;   // delay expressed in system ticks
-} BlinkParams;
+SemaphoreHandle_t buttonSemaphore;
+SemaphoreHandle_t WavMutex;
+QueueHandle_t WavQueue;
+ADC_HandleTypeDef *hadc1;			 // handle for ADC1
+uint32_t ADC1Data;   					 // 12 bit data from adc
+
+TaskHandle_t TxHandle = NULL;
+TaskHandle_t RxHandle = NULL;
 
 
-static BlinkParams bp1 = { .gpio = GPIOG, .pin = GPIO_PIN_13, .ticks = 500};
-static BlinkParams bp2 = { .gpio = GPIOG, .pin = GPIO_PIN_14, .ticks = 1000};
-static BlinkParams bp3 = { .gpio = GPIOG, .pin = GPIO_PIN_14, .ticks = 1000};
-static BlinkParams buttonp = { .gpio = GPIOG, .pin = GPIO_PIN_14, .ticks = 100};
-
-void CLI_Init(void);
-void commandLED(char *args);
-void commandLED2(char *args);
-void SystemClock_Config(void);
-
+void SystemClock_Config(void); // 180 MHz clock from 8 MHz XTAL and PLL
 static void EXTI2_Init(void);
 void EXTI2_IRQHandler(void);
-void USART_POLL_WriteString(const char *string);
-
-void taskLED(void* params)
-{
-	TickType_t start = xTaskGetTickCount();
-  while (params) {
-    HAL_GPIO_TogglePin(((BlinkParams*)params)->gpio, ((BlinkParams*)params)->pin);
-		vTaskDelayUntil(&start,((BlinkParams*)params)->ticks);
-  }
-  
-  vTaskDelete(NULL);
-} 
-
+	
 void taskButton(void* params)
 {
+	buttonSemaphore = xSemaphoreCreateBinary();
+	xSemaphoreTake(WavMutex, 0);
+	static uint8_t state;
 	while(1)
 	{
-		if(mySemaphore != NULL)
-		{
-			if(xSemaphoreTake(mySemaphore, portMAX_DELAY))
+			if(xSemaphoreTake(buttonSemaphore, portMAX_DELAY))
 			{
-				HAL_GPIO_TogglePin(GPIOG, GPIO_PIN_13);
+				HAL_GPIO_TogglePin(GPIOG, GPIO_PIN_13); // green
+				state = state ^ 1; 												// State switches between 1 - rising edge and 0 - falling edge
+				if(state)																	// State 1 - create tasks: start recording and saving files
+				{		
+					xSemaphoreGive(WavMutex);	
+				}
+				else																			// State 0 - delete tasks, stop everything
+				{	
+					xSemaphoreTake(WavMutex, 0);
+				}	
 			}	
+			
+	}
+}
+
+void taskADCtoQue(void* params)
+{
+	WavQueue = xQueueCreate(100, sizeof(uint32_t));
+	WavMutex = xSemaphoreCreateMutex();
+  while (1) 
+	{	 
+		
+		if(xSemaphoreTake(WavMutex, 0))
+		{		
+
+			//ADC1_Start(hadc1);
+			//ADC1Data = ADC1_Get_Value(hadc1);
+			ADC1Data = 1;
+			if (xQueueSend(WavQueue, &ADC1Data, 1000) != pdPASS)
+			{
+					// Failed to put new element into the queue, even after 1000 ticks.				
+			}
+			xSemaphoreGive(WavMutex);
+		
 		}
+		
+	}
+} 
+
+void taskSDfromQue(void* params)
+{
+	WavQueue = xQueueCreate(100, sizeof(uint32_t));
+	WavMutex = xSemaphoreCreateMutex();
+  while (1) 
+	{  
+		
+		if(xSemaphoreTake(WavMutex, 0))
+		{		
+		
+			if (xQueueReceive(WavQueue, &ADC1Data, 1000 ) == pdTRUE)  
+			{
+				// element was received successfully
+				USART_WriteString("z");
+			}	
+			xSemaphoreGive(WavMutex);
+		
+		}		
+		
 	}
 }
 
@@ -67,32 +103,24 @@ int main(void)
     USART_Init();
     TRACE_Init();
 		EXTI2_Init();	
-	  mySemaphore = xSemaphoreCreateBinary();
-		myMutex = xSemaphoreCreateBinary();
-		xSemaphoreGive(myMutex);
-    TaskHandle_t taskHandle1;
-    TaskHandle_t taskHandle2;
-    TaskHandle_t taskHandle3;
-//    if (pdPASS != xTaskCreate(taskLED, "led1", configMINIMAL_STACK_SIZE, &bp1, 3, &taskHandle1)) {
-//        vTaskSetApplicationTaskTag(taskHandle1, (void*)101);
-//				printf("ERROR: Unable to create task!\n");
-//    }
-//        TRACE_BindTaskWithTrace(taskHandle1, 4);
-//    
-//    if (pdPASS != xTaskCreate(taskLED, "led2", configMINIMAL_STACK_SIZE, &bp2, 3, &taskHandle2)) {
-//				vTaskSetApplicationTaskTag(taskHandle1, (void*)102);
-//        printf("ERROR: Unable to create task!\n");
-//    }
-        TRACE_BindTaskWithTrace(taskHandle2, 5);
-		if (pdPASS != xTaskCreate(taskButton, "button", configMINIMAL_STACK_SIZE, &buttonp, 3, &taskHandle2)) {
-				vTaskSetApplicationTaskTag(taskHandle2, (void*)103);
-        printf("ERROR: Unable to create task!\n");
-    }
-    TRACE_BindTaskWithTrace(taskHandle2, 6);
+		ADC1_Init(hadc1);		
+	
+		if (pdPASS != xTaskCreate(taskButton, "Button", configMINIMAL_STACK_SIZE, NULL, 3, NULL)) 
+		{
+			USART_WriteString("hejka.\n\r");
+		}
 		
+		if (pdPASS != xTaskCreate(taskADCtoQue, "ADC to Queue", configMINIMAL_STACK_SIZE, NULL, 3, &TxHandle)) 
+		{
+			USART_WriteString("hejka.\n\r");
+		}
+		if (pdPASS != xTaskCreate(taskSDfromQue, "Queue to ADC", configMINIMAL_STACK_SIZE, NULL, 3, &RxHandle)) 
+		{
+			USART_WriteString("hejka.\n\r");
+		}
+	
     vTaskStartScheduler();
 }
-
 
 void SystemClock_Config(void) {
   RCC_OscInitTypeDef RCC_OscInitStruct;
@@ -145,7 +173,7 @@ static void EXTI2_Init(void)
  
         
   // Enable and set EXTI Line2 Interrupt to the lowest priority
-  HAL_NVIC_SetPriority(EXTI2_IRQn, 15, 0);
+  HAL_NVIC_SetPriority(EXTI2_IRQn, 15, 1);
   HAL_NVIC_EnableIRQ(EXTI2_IRQn);
 }
  
@@ -154,14 +182,11 @@ static void EXTI2_Init(void)
  */
 void EXTI2_IRQHandler(void)
 {	
-	
   // Check if EXTI line interrupt was detected
   if(__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_2) != RESET)  
 	{
-    // Clear the interrupt (has to be done for EXTI)
-    __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_2);
-		HAL_GPIO_TogglePin(GPIOG, GPIO_PIN_14);
-    // Toggle LED   
-		xSemaphoreGiveFromISR(mySemaphore, NULL);
+		__HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_2);			// Clear the interrupt (has to be done for EXTI)
+		HAL_GPIO_TogglePin(GPIOG, GPIO_PIN_14);	  // Toggle LED red 
+		xSemaphoreGiveFromISR(buttonSemaphore, 0);
   }
 }
