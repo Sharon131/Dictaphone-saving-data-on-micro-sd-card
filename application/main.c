@@ -53,12 +53,12 @@ void taskADCtoQue(void* params)
 {
 	WavQueue = xQueueCreate(100, sizeof(uint32_t));
 	WavMutex = xSemaphoreCreateMutex();
+	TickType_t startTime = xTaskGetTickCount();
   while (1) 
 	{	 
 		
 		if(xSemaphoreTake(WavMutex, 0))
 		{		
-
 			//ADC1_Start(hadc1);
 			//ADC1Data = ADC1_Get_Value(hadc1);
 			ADC1Data = 1;
@@ -66,10 +66,10 @@ void taskADCtoQue(void* params)
 			{
 					// Failed to put new element into the queue, even after 1000 ticks.				
 			}
+			USART_WriteString("o");
 			xSemaphoreGive(WavMutex);
-		
+			vTaskDelayUntil(&startTime,1);
 		}
-		
 	}
 } 
 
@@ -77,21 +77,19 @@ void taskSDfromQue(void* params)
 {
 	WavQueue = xQueueCreate(100, sizeof(uint32_t));
 	WavMutex = xSemaphoreCreateMutex();
+	TickType_t startTime = xTaskGetTickCount();
   while (1) 
 	{  
-		
 		if(xSemaphoreTake(WavMutex, 0))
 		{		
-		
 			if (xQueueReceive(WavQueue, &ADC1Data, 1000 ) == pdTRUE)  
 			{
 				// element was received successfully
-				USART_WriteString("z");
+				USART_WriteString("k");
 			}	
 			xSemaphoreGive(WavMutex);
-		
+			vTaskDelayUntil(&startTime,1);
 		}		
-		
 	}
 }
 
