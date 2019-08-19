@@ -6,6 +6,8 @@
 #include "semphr.h"
 #include "queue.h"
 #include "string.h"
+#include "ff.h"
+#include "diskio.h"
 
 extern volatile int tick_counter;
 int executionTime = 0;
@@ -26,8 +28,6 @@ static BlinkParams bp3 = { .gpio = GPIOG, .pin = GPIO_PIN_14, .ticks = 1000};
 static BlinkParams buttonp = { .gpio = GPIOG, .pin = GPIO_PIN_14, .ticks = 100};
 
 void CLI_Init(void);
-void commandLED(char *args);
-void commandLED2(char *args);
 void SystemClock_Config(void);
 
 static void EXTI2_Init(void);
@@ -64,31 +64,24 @@ int main(void)
     HAL_Init();
 		SystemClock_Config();
     LED_Init();
-    USART_Init();
-    TRACE_Init();
 		EXTI2_Init();	
 	  mySemaphore = xSemaphoreCreateBinary();
 		myMutex = xSemaphoreCreateBinary();
 		xSemaphoreGive(myMutex);
-    TaskHandle_t taskHandle1;
-    TaskHandle_t taskHandle2;
-    TaskHandle_t taskHandle3;
-//    if (pdPASS != xTaskCreate(taskLED, "led1", configMINIMAL_STACK_SIZE, &bp1, 3, &taskHandle1)) {
-//        vTaskSetApplicationTaskTag(taskHandle1, (void*)101);
+    TaskHandle_t taskHandle;
+	
+//    if (pdPASS != xTaskCreate(taskLED, "led1", configMINIMAL_STACK_SIZE, &bp1, 3, &taskHandle)) {
+//        vTaskSetApplicationTaskTag(taskHandle, (void*)101);
 //				printf("ERROR: Unable to create task!\n");
 //    }
-//        TRACE_BindTaskWithTrace(taskHandle1, 4);
-//    
-//    if (pdPASS != xTaskCreate(taskLED, "led2", configMINIMAL_STACK_SIZE, &bp2, 3, &taskHandle2)) {
-//				vTaskSetApplicationTaskTag(taskHandle1, (void*)102);
+//    if (pdPASS != xTaskCreate(taskLED, "led2", configMINIMAL_STACK_SIZE, &bp2, 3, &taskHandle)) {
+//				vTaskSetApplicationTaskTag(taskHandle, (void*)102);
 //        printf("ERROR: Unable to create task!\n");
 //    }
-        TRACE_BindTaskWithTrace(taskHandle2, 5);
-		if (pdPASS != xTaskCreate(taskButton, "button", configMINIMAL_STACK_SIZE, &buttonp, 3, &taskHandle2)) {
-				vTaskSetApplicationTaskTag(taskHandle2, (void*)103);
+		if (pdPASS != xTaskCreate(taskButton, "button", configMINIMAL_STACK_SIZE, &buttonp, 3, &taskHandle)) {
+				vTaskSetApplicationTaskTag(taskHandle, (void*)103);
         printf("ERROR: Unable to create task!\n");
     }
-    TRACE_BindTaskWithTrace(taskHandle2, 6);
 		
     vTaskStartScheduler();
 }

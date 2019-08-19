@@ -338,7 +338,7 @@
               <MiscControls></MiscControls>
               <Define></Define>
               <Undefine></Undefine>
-              <IncludePath>.\FreeRTOS\include;.\FreeRTOS\portable\RVDS\ARM_CM4F;.\application</IncludePath>
+              <IncludePath>.\FreeRTOS\include;.\FreeRTOS\portable\RVDS\ARM_CM4F;.\application;.\FatFs</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -442,6 +442,26 @@
               <FileType>5</FileType>
               <FilePath>.\application\ring_buffer.h</FilePath>
             </File>
+            <File>
+              <FileName>sd_card.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\application\sd_card.c</FilePath>
+            </File>
+            <File>
+              <FileName>sd_card.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\application\sd_card.h</FilePath>
+            </File>
+            <File>
+              <FileName>spi.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\application\spi.c</FilePath>
+            </File>
+            <File>
+              <FileName>spi.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\application\spi.h</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -486,6 +506,41 @@
               <FileName>heap.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\FreeRTOS\portable\MemMang\heap.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>FatFs</GroupName>
+          <Files>
+            <File>
+              <FileName>diskio.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\FatFs\diskio.c</FilePath>
+            </File>
+            <File>
+              <FileName>ff.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\FatFs\ff.c</FilePath>
+            </File>
+            <File>
+              <FileName>ffsystem.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\FatFs\ffsystem.c</FilePath>
+            </File>
+            <File>
+              <FileName>ffunicode.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\FatFs\ffunicode.c</FilePath>
+            </File>
+            <File>
+              <FileName>sd_stm32.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\FatFs\sd_stm32.h</FilePath>
+            </File>
+            <File>
+              <FileName>sd_stm32.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\FatFs\sd_stm32.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -552,6 +607,18 @@
         </targetInfos>
       </component>
       <component Cclass="Device" Cgroup="STM32Cube HAL" Csub="RCC" Cvendor="Keil" Cversion="1.7.4" condition="STM32F4 HAL GPIO">
+        <package name="STM32F4xx_DFP" schemaVersion="1.3" url="http://www.keil.com/pack" vendor="Keil" version="2.13.0"/>
+        <targetInfos>
+          <targetInfo name="default"/>
+        </targetInfos>
+      </component>
+      <component Cclass="Device" Cgroup="STM32Cube HAL" Csub="SD" Cvendor="Keil" Cversion="1.7.4" condition="STM32F4x1_40_41_412_42_43_44_46_47x_4x3 HAL DMA">
+        <package name="STM32F4xx_DFP" schemaVersion="1.3" url="http://www.keil.com/pack" vendor="Keil" version="2.13.0"/>
+        <targetInfos>
+          <targetInfo name="default"/>
+        </targetInfos>
+      </component>
+      <component Cclass="Device" Cgroup="STM32Cube HAL" Csub="SPI" Cvendor="Keil" Cversion="1.7.4" condition="STM32F4 HAL DMA">
         <package name="STM32F4xx_DFP" schemaVersion="1.3" url="http://www.keil.com/pack" vendor="Keil" version="2.13.0"/>
         <targetInfos>
           <targetInfo name="default"/>
