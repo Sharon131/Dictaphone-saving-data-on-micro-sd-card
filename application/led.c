@@ -1,8 +1,8 @@
 #include "led.h"
 
 void LED_Init(void){
-    GPIO_InitTypeDef GPIO_InitStruct_13;
-    GPIO_InitTypeDef GPIO_InitStruct_14;
+	GPIO_InitTypeDef GPIO_InitStruct_13;
+	GPIO_InitTypeDef GPIO_InitStruct_14;
  
   // GPIO Ports Clock Enable
   __GPIOG_CLK_ENABLE();

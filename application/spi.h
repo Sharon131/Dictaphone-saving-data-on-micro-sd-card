@@ -3,7 +3,9 @@
 
 #include "stm32f4xx_hal.h"
 
-void SPI_Init(void);
+#include "stdbool.h"
+
+void SPI_Init(bool Polarity, bool Phase);
 
 void SPI_Send(char* MessageToSend);
 void SPI_Read(char* MessageReceived);
