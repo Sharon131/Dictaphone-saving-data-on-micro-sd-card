@@ -6,9 +6,7 @@
 
 #define EMPTY_MSG_VALUE         0
 
-//TODO: zweryfikowac, czy poprawne wartosci sa wpisywane w elementy struktur we wszystkich Initach
-
-//another struct for all of these??
+//struct for all of these??
 static GPIO_TypeDef* SPI_MISO_Port = GPIOG;
 static uint16_t SPI_MISO_Pin = GPIO_PIN_9;
 static GPIO_TypeDef* SPI_MOSI_Port = GPIOG;
@@ -67,7 +65,7 @@ static void __SPI_Init_SCK_Pin(void){
     GPIO_InitStruct_8.Mode  = GPIO_MODE_OUTPUT_PP;
     GPIO_InitStruct_8.Speed = GPIO_SPEED_MEDIUM;
 	
-	if(SPI_Polarity == 0){						//i don't think it will be necessary
+	if(SPI_Polarity == 0){				//i don't think it will be necessary
 		GPIO_InitStruct_8.Pull  = GPIO_PULLDOWN;
 	} else{
 		GPIO_InitStruct_8.Pull  = GPIO_PULLUP;
@@ -76,9 +74,7 @@ static void __SPI_Init_SCK_Pin(void){
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct_8); 
 }
 
-// More arg to add later maybe?: GPIO_TypeDef* MISO_Port, uint16_t MISO_Pin, GPIO_TypeDef* MOSI_Port, uint16_t MOSI_Pin, 
-//		GPIO_TypeDef* SCK_Port, uint16_t SCK_Pin, GPIO_TypeDef* CS_Port, uint16_t CS_Pin, as structure
-
+// More arg to add later maybe?: GPIO_TypeDef* MISO_Port, uint16_t MISO_Pin, etc.
 void SPI_Init(bool Polarity, bool Phase){
 	SPI_Polarity = Polarity;
     SPI_Phase = Phase;
@@ -92,15 +88,17 @@ void SPI_Init(bool Polarity, bool Phase){
     //send clock, change mode to spi???
 }
 
-void __SPI_CopyString(char* Destination, char* Source, size_t SizeToCopy){
-	
-	while(SizeToCopy != 0) {
-		*Destination = *Source;
-		SizeToCopy--;
-	}
+void SPI_SelectDevice(void){
+    HAL_GPIO_Write_Pin(SPI_CS_Port, SPI_CS_Pin, GPIO_PIN_RESET);
 }
 
-void __SPI_SetPinTo();
+void SPI_DeselectDevice(void){
+    HAL_GPIO_Write_Pin(SPI_CS_Port, SPI_CS_Pin, GPIO_PIN_SET);
+}
+
+void __SPI_SetPinTo(){//TODO: see what's the value of RESET and SET for this to know if that function makes sense
+
+}
 
 uint8_t __SPI_Trasmit(char CharacterToSend){
 	uint8_t ShiftRegister = CharacterToSend;
@@ -140,22 +138,9 @@ uint8_t __SPI_Trasmit(char CharacterToSend){
     return ShiftRegister;
 }
 
-char __SPI_ReadCharacter(void){//will not be needed. Delete
-	char CharacterRead = 0;
-	
-	for(uint8_t index=0; index < SPI_BUFFER_SIZE; index++){
-			
-		//set low MOSI pin
-				
-		CharacterRead = CharacterRead << 1;
-		CharacterRead = CharacterRead | SPI_LSB_VALUE;
-	}
-	
-}
-
 //Add changing conn to spi in sd card interface
 void SPI_Send(char* MessageToSend){
-	
+
     while(*MessageToSend != 0){
         __SPI_Trasmit(*MessageToSend);
         MessageToSend++;
