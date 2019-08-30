@@ -1,10 +1,10 @@
 #include "spi.h"
 
 #define SPI_BUFFER_SIZE		    8
-#define SPI_LSB_VALUE			1
-#define SPI_MSB_VALUE			128
+#define SPI_LSB_VALUE					1
+#define SPI_MSB_VALUE					128
 
-#define EMPTY_MSG_VALUE         0
+#define EMPTY_MSG_VALUE       0
 
 //struct for all of these??
 static GPIO_TypeDef* SPI_MISO_Port = GPIOG;
@@ -84,70 +84,64 @@ void SPI_Init(bool Polarity, bool Phase){
 	__SPI_Init_CS_Pin();
 	
 	__SPI_Init_SCK_Pin();
-
-    //send clock, change mode to spi???
 }
 
 void SPI_SelectDevice(void){
-    HAL_GPIO_Write_Pin(SPI_CS_Port, SPI_CS_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(SPI_CS_Port, SPI_CS_Pin, GPIO_PIN_RESET);
 }
 
 void SPI_DeselectDevice(void){
-    HAL_GPIO_Write_Pin(SPI_CS_Port, SPI_CS_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(SPI_CS_Port, SPI_CS_Pin, GPIO_PIN_SET);
 }
 
-void __SPI_SetPinTo(){//TODO: see what's the value of RESET and SET for this to know if that function makes sense
-
-}
-
-uint8_t __SPI_Trasmit(char CharacterToSend){
+uint8_t __SPI_Trasmit(char CharacterToSend){//assumed the Pol=1 and Phas=1, just like in sd card comm
 	uint8_t ShiftRegister = CharacterToSend;
 
 
 	for(uint8_t index=0; index < SPI_BUFFER_SIZE; index++){
 		
-        //clock low
-        HAL_GPIO_Write_Pin(SPI_SCK_Port, SPI_SCK_Pin, GPIO_PIN_RESET);
+		//clock low
+		HAL_GPIO_WritePin(SPI_SCK_Port, SPI_SCK_Pin, GPIO_PIN_RESET);
 
-        //write
-        
-        if((ShiftRegister & SPI_MSB_VALUE) == SPI_MSB_VALUE){
-			HAL_GPIO_Write_Pin(SPI_MOSI_Port, SPI_MOSI_Pin, GPIO_PIN_SET);
+		//write
+		
+		if((ShiftRegister & SPI_MSB_VALUE) == SPI_MSB_VALUE){
+			HAL_GPIO_WritePin(SPI_MOSI_Port, SPI_MOSI_Pin, GPIO_PIN_SET);
 		} else {
-			HAL_GPIO_Write_Pin(SPI_MOSI_Port, SPI_MOSI_Pin, GPIO_PIN_RESET);
+			HAL_GPIO_WritePin(SPI_MOSI_Port, SPI_MOSI_Pin, GPIO_PIN_RESET);
 		}
 
-        ShiftRegister = ShiftRegister << 1;
+    ShiftRegister = ShiftRegister << 1;
 
-        //delay until -> do implementacji
+    //delay until -> do implementacji
 
 		//clock high
-        HAL_GPIO_Write_Pin(SPI_SCK_Port, SPI_SCK_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(SPI_SCK_Port, SPI_SCK_Pin, GPIO_PIN_SET);
         
-        //read
-        if(HAL_GPIO_ReadPin(SPI_MISO_Port, SPI_MISO_Pin) == GPIO_PIN_SET){
-            ShiftRegister |= 1;
-        } else {
-            ShiftRegister |= 0;
-        }
+		//read
+		if(HAL_GPIO_ReadPin(SPI_MISO_Port, SPI_MISO_Pin) == GPIO_PIN_SET){
+				ShiftRegister |= 1;
+		} else {
+				ShiftRegister |= 0;
+		}
 
-        //delay until
+		//delay until
 
 	}
 	
-    return ShiftRegister;
+  return ShiftRegister;
 }
 
-//Add changing conn to spi in sd card interface
-void SPI_Send(char* MessageToSend){
+void SPI_Send(uint8_t* MessageToSend, size_t BytesToSend){
 
-    while(*MessageToSend != 0){
+    while(*MessageToSend != 0 && BytesToSend != 0){
         __SPI_Trasmit(*MessageToSend);
         MessageToSend++;
+				BytesToSend--;
     }
 }
 
-void SPI_Read(char* MessageReceived, size_t SizeOfBuffer){
+void SPI_Read(uint8_t* MessageReceived, size_t SizeOfBuffer){
 	uint16_t index = 0;
 
     while(index != SizeOfBuffer){
