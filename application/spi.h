@@ -7,6 +7,9 @@
 
 void SPI_Init(bool Polarity, bool Phase);
 
+void SPI_SelectDevice(void);
+void SPI_DeselectDevice(void);
+
 void SPI_Send(char* MessageToSend);
 void SPI_Read(char* MessageReceived);
 
