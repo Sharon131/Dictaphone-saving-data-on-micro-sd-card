@@ -15,8 +15,8 @@ void EXTI2_Init(void)
   HAL_GPIO_Init(GPIOG, &GPIO_InitStructure);
  
         
-  // Enable and set EXTI Line2 Interrupt to the lowest priority
-  HAL_NVIC_SetPriority(EXTI2_IRQn, 15, 1);
+  // Enable and set EXTI Line2 Interrupt to the !highest! priority
+  HAL_NVIC_SetPriority(EXTI2_IRQn, 1, 1);
   HAL_NVIC_EnableIRQ(EXTI2_IRQn);
 }
 

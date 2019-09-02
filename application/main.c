@@ -12,7 +12,6 @@
 extern volatile int tick_counter;
 int executionTime = 0;
 
-SemaphoreHandle_t buttonSemaphore;
 SemaphoreHandle_t WavMutex;
 QueueHandle_t WavQueue;				 // Queue for ADC1 data
 ADC_HandleTypeDef *hadc1;			 // handle for ADC1
@@ -24,57 +23,33 @@ TaskHandle_t RxHandle = NULL;
 
 void SystemClock_Config(void); // 180 MHz clock from 8 MHz XTAL and PLL
 
-void taskButton(void* params)
-{
-	buttonSemaphore = xSemaphoreCreateBinary();
-	//xSemaphoreTake(WavMutex, 0);
-	static uint8_t state;
-	while(1)
-	{	
-	USART_WriteString("*");			
-			if(xSemaphoreTake(buttonSemaphore, 0))
-			{
-				//taskENTER_CRITICAL();
-				HAL_GPIO_TogglePin(GPIOG, GPIO_PIN_13); // green
-				state = state ^ 1; 												// State switches between 1 - rising edge and 0 - falling edge
-				if(state)																	// State 1 - create tasks: start recording and saving files
-				{		
-					xSemaphoreGive(WavMutex);	
-					USART_WriteString("G");	
-				}
-				else																			// State 0 - delete tasks, stop everything
-				{	
-					xSemaphoreTake(WavMutex, 0);
-					USART_WriteString("T");	
-				}	
-				//taskEXIT_CRITICAL();
-			}	
-	}
-}
 
 void taskADCtoQue(void* params)
 {
 	WavQueue = xQueueCreate(100, sizeof(uint32_t));
-	//WavMutex = xSemaphoreCreateMutex();
+	WavMutex = xSemaphoreCreateBinary();
 	//TickType_t startTime = xTaskGetTickCount();
   while (1) 
 	{	 
-		if(xSemaphoreTake(WavMutex, 0))
-		{		
-			taskENTER_CRITICAL();
-			//ADC1_Start(hadc1);
-			//ADC1Data = ADC1_Get_Value(hadc1);
-			ADC1Data = 1;
-			if (xQueueSend(WavQueue, &ADC1Data, 1000) != pdPASS)
-			{	
-					// Failed to put new element into the queue, even after 1000 ticks.			
-					USART_WriteString("*");				
-			}
-			USART_WriteString("K");
-			xSemaphoreGive(WavMutex);
-			//vTaskDelayUntil(&startTime,1);
-			taskEXIT_CRITICAL();
-			taskYIELD();
+		if(WavMutex != NULL)
+		{
+			if(xSemaphoreTake(WavMutex, 0) == pdTRUE)
+			{		
+				//taskENTER_CRITICAL();
+				//ADC1_Start(hadc1);
+				//ADC1Data = ADC1_Get_Value(hadc1);
+				ADC1Data = 1;
+				if (xQueueSend(WavQueue, &ADC1Data, 1000) != pdPASS)
+				{	
+						// Failed to put new element into the queue, even after 1000 ticks.			
+						USART_WriteString("*");				
+				}
+				USART_WriteString("K");
+				xSemaphoreGive(WavMutex);
+				//vTaskDelayUntil(&startTime,1);
+				//taskEXIT_CRITICAL();
+				taskYIELD();
+			}	
 		}			
 	}
 } 
@@ -82,23 +57,26 @@ void taskADCtoQue(void* params)
 void taskSDfromQue(void* params)
 {
 	WavQueue = xQueueCreate(100, sizeof(uint32_t));
-	//WavMutex = xSemaphoreCreateMutex();
+	WavMutex = xSemaphoreCreateBinary();
 	//TickType_t startTime = xTaskGetTickCount();
   while (1) 
 	{  
-		if(xSemaphoreTake(WavMutex, 0))
-		{		
-			taskENTER_CRITICAL();
-			if (xQueueReceive(WavQueue, &ADC1Data, 1000 ) == pdTRUE)  
-			{
-				// element was received successfully
-				USART_WriteString("N");
-			}	
-			xSemaphoreGive(WavMutex);
-			//vTaskDelayUntil(&startTime,1);
-			taskEXIT_CRITICAL();
-			taskYIELD();
-		}		
+		if(WavMutex != NULL)
+		{
+			if(xSemaphoreTake(WavMutex, 0) == pdTRUE)
+			{		
+				//taskENTER_CRITICAL();
+				if (xQueueReceive(WavQueue, &ADC1Data, 1000 ) == pdTRUE)  
+				{
+					// element was received successfully
+					USART_WriteString("N");
+				}	
+				xSemaphoreGive(WavMutex);
+				//vTaskDelayUntil(&startTime,1);
+				//taskEXIT_CRITICAL();
+				taskYIELD();
+			}		
+		}
 	}
 }
 
@@ -120,10 +98,7 @@ int main(void)
 	{
 		USART_WriteString("hejka.\n\r");
 	}
-	if (pdPASS != xTaskCreate(taskButton, "Button", configMINIMAL_STACK_SIZE, NULL, 3, NULL)) 
-	{
-		USART_WriteString("hejka.\n\r");
-	}
+	
 	
   vTaskStartScheduler();
 }
@@ -160,22 +135,34 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
   HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5);
 }
-
-/**
- * Configures EXTI Line2 (connected to PG2 pin) in interrupt mode
- */
-
  
 /**
  * This function handles External line 2 interrupt request.
  */
 void EXTI2_IRQHandler(void)
 {	
+	static uint8_t state;
+	
   // Check if EXTI line interrupt was detected
   if(__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_2) != RESET)  
 	{
 		__HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_2);			// Clear the interrupt (has to be done for EXTI)
 		HAL_GPIO_TogglePin(GPIOG, GPIO_PIN_14);	  // Toggle LED red 
-		xSemaphoreGiveFromISR(buttonSemaphore, 0);
+		state = state ^ 1; 												// State switches between 1 - rising edge and 0 - falling edge
+		switch (state)
+		{
+			case 1:	// State 1 - create tasks: start recording and saving files
+			{
+				xSemaphoreGiveFromISR(WavMutex, NULL);	
+				USART_WriteString("G");	
+				break;
+			}
+			default:	// State 0 - delete tasks, stop everything
+			{
+				xSemaphoreTakeFromISR(WavMutex, 0);
+				USART_WriteString("T");
+				break;
+			}
+		}			
   }
 }
