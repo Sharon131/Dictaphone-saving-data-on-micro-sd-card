@@ -2,8 +2,6 @@
 
 void ADC1_Init(ADC_HandleTypeDef *hadc)
 {
-  ADC_ChannelConfTypeDef sConfig;   // ADC1 channel options
-
   // Configure ADC (Clock, Resolution, Data Alignment and number of conversion) 
   
 	// ADC in single shot mode - processing each ADC sample when it's available
@@ -20,6 +18,7 @@ void ADC1_Init(ADC_HandleTypeDef *hadc)
   hadc->Init.DMAContinuousRequests = DISABLE;											 // For DMA
   hadc->Init.EOCSelection = ADC_EOC_SINGLE_CONV;									   // End Of Conversion flag is set after conversion finishes
  
+	 ADC_ChannelConfTypeDef sConfig;   // ADC1 channel options
   // Configure selected ADC channel 
   sConfig.Channel = ADC_CHANNEL_7;																 // 7 channel is where (AUDIO in) from expanding board is
   sConfig.Rank = 1;																								 // 1 position in measurments queue
@@ -44,4 +43,5 @@ uint32_t ADC1_Get_Value(ADC_HandleTypeDef* hadc)
 	{
 		return HAL_ADC_GetValue(hadc);
 	}
+	return 0;
 }

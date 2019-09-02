@@ -7,13 +7,14 @@
 #include "queue.h"
 #include "string.h"
 #include "adc1.h"
+#include "exti2.h"
 
 extern volatile int tick_counter;
 int executionTime = 0;
 
 SemaphoreHandle_t buttonSemaphore;
 SemaphoreHandle_t WavMutex;
-QueueHandle_t WavQueue;
+QueueHandle_t WavQueue;				 // Queue for ADC1 data
 ADC_HandleTypeDef *hadc1;			 // handle for ADC1
 uint32_t ADC1Data;   					 // 12 bit data from adc
 
@@ -22,105 +23,113 @@ TaskHandle_t RxHandle = NULL;
 
 
 void SystemClock_Config(void); // 180 MHz clock from 8 MHz XTAL and PLL
-static void EXTI2_Init(void);
-void EXTI2_IRQHandler(void);
-	
+
 void taskButton(void* params)
 {
 	buttonSemaphore = xSemaphoreCreateBinary();
-	xSemaphoreTake(WavMutex, 0);
+	//xSemaphoreTake(WavMutex, 0);
 	static uint8_t state;
 	while(1)
-	{
-			if(xSemaphoreTake(buttonSemaphore, portMAX_DELAY))
+	{	
+	USART_WriteString("*");			
+			if(xSemaphoreTake(buttonSemaphore, 0))
 			{
+				//taskENTER_CRITICAL();
 				HAL_GPIO_TogglePin(GPIOG, GPIO_PIN_13); // green
 				state = state ^ 1; 												// State switches between 1 - rising edge and 0 - falling edge
 				if(state)																	// State 1 - create tasks: start recording and saving files
 				{		
 					xSemaphoreGive(WavMutex);	
+					USART_WriteString("G");	
 				}
 				else																			// State 0 - delete tasks, stop everything
 				{	
 					xSemaphoreTake(WavMutex, 0);
+					USART_WriteString("T");	
 				}	
+				//taskEXIT_CRITICAL();
 			}	
-			
 	}
 }
 
 void taskADCtoQue(void* params)
 {
 	WavQueue = xQueueCreate(100, sizeof(uint32_t));
-	WavMutex = xSemaphoreCreateMutex();
-	TickType_t startTime = xTaskGetTickCount();
+	//WavMutex = xSemaphoreCreateMutex();
+	//TickType_t startTime = xTaskGetTickCount();
   while (1) 
 	{	 
-		
 		if(xSemaphoreTake(WavMutex, 0))
 		{		
+			taskENTER_CRITICAL();
 			//ADC1_Start(hadc1);
 			//ADC1Data = ADC1_Get_Value(hadc1);
 			ADC1Data = 1;
 			if (xQueueSend(WavQueue, &ADC1Data, 1000) != pdPASS)
-			{
-					// Failed to put new element into the queue, even after 1000 ticks.				
+			{	
+					// Failed to put new element into the queue, even after 1000 ticks.			
+					USART_WriteString("*");				
 			}
-			USART_WriteString("o");
+			USART_WriteString("K");
 			xSemaphoreGive(WavMutex);
-			vTaskDelayUntil(&startTime,1);
-		}
+			//vTaskDelayUntil(&startTime,1);
+			taskEXIT_CRITICAL();
+			taskYIELD();
+		}			
 	}
 } 
 
 void taskSDfromQue(void* params)
 {
 	WavQueue = xQueueCreate(100, sizeof(uint32_t));
-	WavMutex = xSemaphoreCreateMutex();
-	TickType_t startTime = xTaskGetTickCount();
+	//WavMutex = xSemaphoreCreateMutex();
+	//TickType_t startTime = xTaskGetTickCount();
   while (1) 
 	{  
 		if(xSemaphoreTake(WavMutex, 0))
 		{		
+			taskENTER_CRITICAL();
 			if (xQueueReceive(WavQueue, &ADC1Data, 1000 ) == pdTRUE)  
 			{
 				// element was received successfully
-				USART_WriteString("k");
+				USART_WriteString("N");
 			}	
 			xSemaphoreGive(WavMutex);
-			vTaskDelayUntil(&startTime,1);
+			//vTaskDelayUntil(&startTime,1);
+			taskEXIT_CRITICAL();
+			taskYIELD();
 		}		
 	}
 }
 
 int main(void)
 {
-    HAL_Init();
-		SystemClock_Config();
-    LED_Init();
-    USART_Init();
-    TRACE_Init();
-		EXTI2_Init();	
-		ADC1_Init(hadc1);		
+	HAL_Init();
+	SystemClock_Config();
+  LED_Init();
+  USART_Init();
+  TRACE_Init();
+	EXTI2_Init();	
+	ADC1_Init(hadc1);		
 	
-		if (pdPASS != xTaskCreate(taskButton, "Button", configMINIMAL_STACK_SIZE, NULL, 3, NULL)) 
-		{
-			USART_WriteString("hejka.\n\r");
-		}
-		
-		if (pdPASS != xTaskCreate(taskADCtoQue, "ADC to Queue", configMINIMAL_STACK_SIZE, NULL, 3, &TxHandle)) 
-		{
-			USART_WriteString("hejka.\n\r");
-		}
-		if (pdPASS != xTaskCreate(taskSDfromQue, "Queue to ADC", configMINIMAL_STACK_SIZE, NULL, 3, &RxHandle)) 
-		{
-			USART_WriteString("hejka.\n\r");
-		}
+	if (pdPASS != xTaskCreate(taskADCtoQue, "ADC to Queue", configMINIMAL_STACK_SIZE, NULL, 3, &TxHandle)) 
+	{
+		USART_WriteString("hejka.\n\r");
+	}
+	if (pdPASS != xTaskCreate(taskSDfromQue, "Queue to ADC", configMINIMAL_STACK_SIZE, NULL, 3, &RxHandle)) 
+	{
+		USART_WriteString("hejka.\n\r");
+	}
+	if (pdPASS != xTaskCreate(taskButton, "Button", configMINIMAL_STACK_SIZE, NULL, 3, NULL)) 
+	{
+		USART_WriteString("hejka.\n\r");
+	}
 	
-    vTaskStartScheduler();
+  vTaskStartScheduler();
 }
 
-void SystemClock_Config(void) {
+void SystemClock_Config(void) 
+{	
   RCC_OscInitTypeDef RCC_OscInitStruct;
   RCC_ClkInitTypeDef RCC_ClkInitStruct;
  
@@ -155,25 +164,7 @@ void SystemClock_Config(void) {
 /**
  * Configures EXTI Line2 (connected to PG2 pin) in interrupt mode
  */
-static void EXTI2_Init(void)
-{
-  GPIO_InitTypeDef  GPIO_InitStructure;
-        
-  // Enable GPIOG clock
-  __GPIOG_CLK_ENABLE();
-  
-  // Configure PG2 pin as input with EXTI interrupt on the falling edge and pull-up
-  GPIO_InitStructure.Speed = GPIO_SPEED_LOW;
-  GPIO_InitStructure.Mode = GPIO_MODE_IT_RISING_FALLING;
-  GPIO_InitStructure.Pull = GPIO_PULLUP;
-  GPIO_InitStructure.Pin = GPIO_PIN_2;
-  HAL_GPIO_Init(GPIOG, &GPIO_InitStructure);
- 
-        
-  // Enable and set EXTI Line2 Interrupt to the lowest priority
-  HAL_NVIC_SetPriority(EXTI2_IRQn, 15, 1);
-  HAL_NVIC_EnableIRQ(EXTI2_IRQn);
-}
+
  
 /**
  * This function handles External line 2 interrupt request.
