@@ -16,7 +16,7 @@ void EXTI2_Init(void)
  
         
   // Enable and set EXTI Line2 Interrupt to the !highest! priority
-  HAL_NVIC_SetPriority(EXTI2_IRQn, 1, 1);
+  HAL_NVIC_SetPriority(EXTI2_IRQn, 15, 15);
   HAL_NVIC_EnableIRQ(EXTI2_IRQn);
 }
 
