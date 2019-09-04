@@ -6,6 +6,9 @@
 
 void SD_Init(void);
 
+void SD_SendCommand(uint8_t CommandToSend, uint32_t ArgsForCommand);
 
+bool SD_ReceiveDataBlock(uint8_t* Buffer, uint16_t NumberOfBytesToReceive);
+bool SD_SendDataBlock(uint8_t* Buffer, uint16_t NumberOfBytesToSend);
 
 #endif
