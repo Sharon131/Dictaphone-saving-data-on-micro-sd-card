@@ -142,12 +142,12 @@ uint8_t SD_SendCommand(uint8_t CommandToSend, uint32_t ArgsForCommand){
 	return Repsonse;
 }
 
-bool SD_ReceiveDataBlock(uint8_t* Buffer, uint16_t NumberOfBytesToReceive){
-	//sending reading sector command in diskio file
+bool SD_ReceiveDataPacket(uint8_t* Buffer, uint16_t NumberOfBytesToReceive){
+	//add waitfor to wait for token to arrive
 	uint16_t Timeout = 65000;
 	uint8_t ReceivedToken = SPI_Trasmit(SD_IDLE_STATE_VALUE);
 
-	while(ReceivedToken == SD_IDLE_STATE_VALUE && Timeout != 0){
+	while(ReceivedToken == SD_IDLE_STATE_VALUE && Timeout != 0){//waitfor instead??
 		ReceivedToken = SPI_Trasmit(SD_IDLE_STATE_VALUE);
 		Timeout--;
 	}
@@ -166,21 +166,56 @@ bool SD_ReceiveDataBlock(uint8_t* Buffer, uint16_t NumberOfBytesToReceive){
 	return true;
 }
 
-bool SD_SendDataBlock(uint8_t* Buffer, uint16_t NumberOfBytesToSend, uint8_t Token){
-	uint8_t ReceivedByte = 0;
-	uint8_t Timeout = 10;
+bool SingleBlockRead(void){
+	SD_SendCommand(CMD17, );//TODO: add address as arg
 
-	//uint8_t ReceivedByte = __SD_WaitFor(2);
+	uint8_t ByteReceived = __SD_WaitFor(10);
 
-	while(ReceivedByte != SD_IDLE_STATE_VALUE && Timeout != 0){
-		ReceivedByte = SPI_Trasmit(SD_IDLE_STATE_VALUE);
-		Timeout--;
+	if(ByteReceived != 0)		return false;
+
+	bool WasReadSuccessful = SD_ReceiveDataPacket(, 512);
+
+	__SD_WaitFor(2);//just in case
+
+	return WasReadSuccessful;
+}
+
+bool MultipleBlockRead(uint16_t NoOfBlockToRead){
+	bool WasReadSuccessful = 0;
+	
+	SD_SendCommand(CMD18, );//TODO: add address as arg
+
+	uint8_t ByteReceived = __SD_WaitFor(10);
+
+	if(ByteReceived != 0)		return false;
+
+	while(NoOfBlockToRead != 0){
+		WasReadSuccessful = SD_ReceiveDataPacket(, 512);
+
+		if(!WasReadSuccessful)	return false;
 	}
+
+	SD_SendCommand(CMD12, 0);
+
+	//TODO: wait until 0xff
+
+	ByteReceived = __SD_WaitFor(8);
+
+	if(ByteReceived != 0)	;//TODO: deal with that
+
+	//TODO: wait untill ready (0xff, as before)
+
+	return true;
+}
+
+bool SD_SendDataPacket(uint8_t* Buffer, uint16_t NumberOfBytesToSend, uint8_t Token){
+
+	uint8_t ReceivedByte = __SD_WaitFor(2);
 
 	SPI_Trasmit(Token);
 
-	if(Token == CMD25_STOP_TRAN_TOKEN){//exception for stop_tran_token -> maybe move to send single/multiple block function??
-		SPI_Trasmit(SD_IDLE_STATE_VALUE);
+	if(Token == CMD25_STOP_TRAN_TOKEN){//exception for stop_tran_token -> maybe move to send multiple block function??
+		__SD_WaitFor(1);
 
 		
 	}
@@ -204,6 +239,16 @@ bool SD_SendDataBlock(uint8_t* Buffer, uint16_t NumberOfBytesToSend, uint8_t Tok
 
 	return (DataResponse & DATA_RESPONSE_ACCEPTED);
 }
+
+bool SD_SendSingleBlock(void){
+	;
+}
+
+bool SD_SendMultipleBlock(uint16_t NoOfBlockToSend){
+	;
+}
+
+
 
 
 void SD_ReadMessage(char* MessageRead){

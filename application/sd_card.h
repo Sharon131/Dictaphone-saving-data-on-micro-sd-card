@@ -8,7 +8,14 @@ void SD_Init(void);
 
 uint8_t SD_SendCommand(uint8_t CommandToSend, uint32_t ArgsForCommand);
 
-bool SD_ReceiveDataBlock(uint8_t* Buffer, uint16_t NumberOfBytesToReceive);
-bool SD_SendDataBlock(uint8_t* Buffer, uint16_t NumberOfBytesToSend, uint8_t Token);
+bool SD_ReceiveDataPacket(uint8_t* Buffer, uint16_t NumberOfBytesToReceive);//TODO: make static
+
+bool SingleBlockRead(void);
+bool MultipleBlockRead(uint16_t NoOfBlockToRead);
+
+bool SD_SendDataPacket(uint8_t* Buffer, uint16_t NumberOfBytesToSend, uint8_t Token);//TODO: make static
+
+bool SD_SendSingleBlock(void);
+bool SD_SendMultipleBlock(uint16_t NoOfBlockToSend);
 
 #endif
