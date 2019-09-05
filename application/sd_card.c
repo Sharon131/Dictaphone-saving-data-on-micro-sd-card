@@ -74,7 +74,7 @@ void __SD_InitChangeToSPI_Mode(void){//move to diskio file
 	SPI_Send(MessageBuffer, SD_LENGTH_OF_COMMAND);
 }
 
-void SD_Init(void){
+void SD_Init(void){//TODO: correct
 	uint16_t Timeout = 60000;
     
     SPI_Init(SPI_POL_IN_SDCARD_MODE, SPI_PHA_IN_SDCARD_MODE);
@@ -87,9 +87,9 @@ void SD_Init(void){
 	
 	__SD_InitChangeToSPI_Mode();
 	
-    char ByteReceived = 0;
+  uint8_t ByteReceived = 0;
 	while(ByteReceived != 1 && Timeout != 0){
-        SPI_Read(ByteReceived, 1);
+        SPI_Read(&ByteReceived, 1);
         Timeout--;
     }
 	
@@ -97,7 +97,11 @@ void SD_Init(void){
 
     ByteReceived = 0xFF;
 
-    SPI_Send(ByteReceived, 1);
+    SPI_Send(&ByteReceived, 1);
+}
+
+bool __SD_IsCardReady(void){
+	return (SPI_Trasmit(SD_IDLE_STATE_VALUE) == SD_IDLE_STATE_VALUE);
 }
 
 uint8_t __SD_WaitFor(uint8_t MaxNoOfByteCycles){
@@ -132,14 +136,14 @@ uint8_t SD_SendCommand(uint8_t CommandToSend, uint32_t ArgsForCommand){
 	}
 
 	uint8_t Timeout = 10;
-	uint8_t Repsonse = 0x80;
+	uint8_t Response = 0x80;
 
-	while( Response & 0x80 != 0 && Timeout != 0){
+	while( (Response & 0x80) != 0 && Timeout != 0){
 		Response = SPI_Trasmit(SD_IDLE_STATE_VALUE);
 		Timeout--;
 	}
 
-	return Repsonse;
+	return Response;
 }
 
 bool SD_ReceiveDataPacket(uint8_t* Buffer, uint16_t NumberOfBytesToReceive){
@@ -197,13 +201,13 @@ bool MultipleBlockRead(uint16_t NoOfBlockToRead){
 
 	SD_SendCommand(CMD12, 0);
 
-	//TODO: wait until 0xff
+	while(!__SD_IsCardReady());
 
 	ByteReceived = __SD_WaitFor(8);
 
 	if(ByteReceived != 0)	;//TODO: deal with that
 
-	//TODO: wait untill ready (0xff, as before)
+	while(!__SD_IsCardReady());
 
 	return true;
 }

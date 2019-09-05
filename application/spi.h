@@ -13,8 +13,6 @@ void SPI_DeselectDevice(void);
 
 uint8_t SPI_Trasmit(uint8_t CharacterToSend);
 
-bool SPI_IsReadyToSend(void);
-
 void SPI_Send(uint8_t* MessageToSend, size_t BytesToSend);
 void SPI_Read(uint8_t* MessageReceived, size_t SizeOfBuffer);
 
