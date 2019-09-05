@@ -21,7 +21,42 @@ uint32_t ADC1Data;   					 // 12 bit data from adc
 TaskHandle_t TxHandle = NULL;
 TaskHandle_t RxHandle = NULL;
 
+typedef struct 
+{															// [BE] = Big Endian, [LE] = Little Endian													
+		// The "RIFF" chunk descriptor: header
+	uint8_t ChunkID[4]; 						// 0x52 49 46 46 == "RIFF" [BE]
+	uint32_t ChunkSize;						// 36 + Subchunk2Size [LE]
+	uint8_t Format[4];							// 0x57 41 56 45 == "WAVE" [BE]
+		
+		// The "fmt" sub-chunk: sound data's format
+	uint8_t Subchunk1ID[4];					// 0x66 6d 74 20 = "fmt " [BE]
+	uint32_t Subchunk1Size;				// 16 for PCM, size of the rest of this subchunk [LE]
+	uint16_t AudioFormat;					// PCM = 1 (li near quantization) !=1 for compression [LE]
+	uint16_t NumChannels;					// mono = 1, Stereo = 2 [LE]
+	uint32_t SampleRate;					// 8000, 44100(most common), etc. [LE]
+	uint32_t ByteRate;						// == Sample Rate * NumChannels * BitsPerSample/8 [LE]
+	uint16_t BlockAlign;					// == NumChannels * BitsPerSample/8 [LE]
+																// Number of bytes for one sample including all channels	
+	uint16_t BitsPerSample;				// 8 bits = 8, 16 bits = 16, etc. [LE]
+		
+		// the "data" sub-chunk: size of data and actual sound
+	uint8_t Subchunk2ID[4];					// 0x64 61 74 61 == "data" [BE]
+	uint32_t Subchunk2Size;				// == NumSamples * NumChannels * BitsPerSample/8 [LE]
+	//uint8_t data[];	// actual sound data, [Subchunk2Size] [LE]
+} WavFileHeader;
+	
+typedef struct
+{
+		WavFileHeader header;
+	uint8_t* data;
+	uint64_t index;
+	uint64_t size;
+	uint64_t nSamples;
+} WaveFile;
 
+	WavFileHeader generateWaveHeader(uint32_t sampleRate, uint16_t numChannels, uint16_t bitsPerSample);
+	WaveFile makeWave(uint32_t sampleRate, uint16_t numChannels, uint16_t bitsPerSample);
+	
 void SystemClock_Config(void); // 180 MHz clock from 8 MHz XTAL and PLL
 
 
@@ -122,6 +157,61 @@ void SystemClock_Config(void)
   HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5);
 }
  
+
+WavFileHeader generateWaveHeader(uint32_t sampleRate, uint16_t numChannels, uint16_t bitsPerSample)
+{
+	//RIFF WAVE Header
+	WavFileHeader newHeader;
+	newHeader.ChunkID[0] = 'R';
+	newHeader.ChunkID[1] = 'I';
+	newHeader.ChunkID[2] = 'F';
+	newHeader.ChunkID[3] = 'F';
+	newHeader.Format[0] = 'W';
+	newHeader.Format[1] = 'A';
+	newHeader.Format[2] = 'V';
+	newHeader.Format[3] = 'E';
+	
+	//Format subchunk
+	newHeader.Subchunk1ID[0] = 'f';
+  newHeader.Subchunk1ID[1] = 'm';
+  newHeader.Subchunk1ID[2] = 't';
+  newHeader.Subchunk1ID[3] = ' ';
+	newHeader.AudioFormat = 1; // PCM
+	newHeader.NumChannels = numChannels;
+	newHeader.SampleRate = sampleRate; // most likely 44100 hertz
+	newHeader.BitsPerSample = bitsPerSample; // 
+  newHeader.ByteRate = newHeader.SampleRate * newHeader.NumChannels * newHeader.BitsPerSample / 8;
+  newHeader.BlockAlign = newHeader.NumChannels * newHeader.BitsPerSample/8;
+	
+	// Data subchunk
+  newHeader.Subchunk2ID[0] = 'd';
+  newHeader.Subchunk2ID[1] = 'a';
+  newHeader.Subchunk2ID[2] = 't';
+  newHeader.Subchunk2ID[3] = 'a';
+	
+	// All sizes:
+  // chuckSize = 4 + (8 + subChunk1Size) + (8 + subChubk2Size)
+  // subChunk1Size is constanst, i'm using 16 and staying with PCM
+  // subChunk2Size = nSamples * nChannels * bitsPerSample/8
+  // Whenever a sample is added:
+  //    chunkSize += (nChannels * bitsPerSample/8)
+  //    subChunk2Size += (nChannels * bitsPerSample/8)
+	newHeader.ChunkSize = 4+8+16+8+0;
+  newHeader.Subchunk1Size = 16;
+  newHeader.Subchunk2Size = 0;
+	
+	return newHeader;
+}
+
+WaveFile makeWave(uint32_t sampleRate, uint16_t numChannels, uint16_t bitsPerSample)
+{
+	WaveFile newWave;
+	newWave.header = generateWaveHeader(sampleRate, numChannels, bitsPerSample)
+	
+	return newWave;
+	
+}
+
 /**
  * This function handles External line 2 interrupt request.
  */
