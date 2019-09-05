@@ -34,6 +34,10 @@
 #define CMD25_DATA_TOKEN		0xFC
 #define CMD25_STOP_TRAN_TOKEN	0xFD
 
+#define DATA_RESPONSE_ACCEPTED	5
+#define DATA_RESPONSE_CRC_ERR	11
+#define DATA_RESPONSE_WRITE_ERR	13
+
 #define SD_SPI_MISO_PORT	GPIOG
 #define SD_SPI_MISO_PIN		GPIO_PIN_9
 #define SD_SPI_MOSI_PORT	GPIOG
@@ -96,13 +100,18 @@ void SD_Init(void){
     SPI_Send(ByteReceived, 1);
 }
 
-void __SD_WaitForResponse(void){
+uint8_t __SD_WaitFor(uint8_t MaxNoOfByteCycles){
+	uint8_t ByteReceived = SD_IDLE_STATE_VALUE;
 
-	while();//is pin set to 1 -> move it to SPI file?? rather not
+	while(MaxNoOfByteCycles != 0 && ByteReceived == SD_IDLE_STATE_VALUE){
+		ByteReceived = SPI_Trasmit(SD_IDLE_STATE_VALUE);
+		MaxNoOfByteCycles--;
+	}
+
+	return ByteReceived;
 }
 
-
-void SD_SendCommand(uint8_t CommandToSend, uint32_t ArgsForCommand){
+uint8_t SD_SendCommand(uint8_t CommandToSend, uint32_t ArgsForCommand){
 	
 	SPI_Trasmit(CommandToSend);
 	SPI_Trasmit((uint8_t)(ArgsForCommand >> 24));
@@ -117,14 +126,83 @@ void SD_SendCommand(uint8_t CommandToSend, uint32_t ArgsForCommand){
 	} else {
 		SPI_Trasmit(0);
 	}
+
+	if(CommandToSend == CMD12){
+		SPI_Trasmit(SD_IDLE_STATE_VALUE);//discard received data
+	}
+
+	uint8_t Timeout = 10;
+	uint8_t Repsonse = 0x80;
+
+	while( Response & 0x80 != 0 && Timeout != 0){
+		Response = SPI_Trasmit(SD_IDLE_STATE_VALUE);
+		Timeout--;
+	}
+
+	return Repsonse;
 }
 
 bool SD_ReceiveDataBlock(uint8_t* Buffer, uint16_t NumberOfBytesToReceive){
+	//sending reading sector command in diskio file
+	uint16_t Timeout = 65000;
+	uint8_t ReceivedToken = SPI_Trasmit(SD_IDLE_STATE_VALUE);
 
+	while(ReceivedToken == SD_IDLE_STATE_VALUE && Timeout != 0){
+		ReceivedToken = SPI_Trasmit(SD_IDLE_STATE_VALUE);
+		Timeout--;
+	}
+
+	if(ReceivedToken != CMD17_18_24_DATA_TOKEN)		return false;
+
+	while(NumberOfBytesToReceive != 0){
+		*Buffer = SPI_Trasmit(SD_IDLE_STATE_VALUE);
+		Buffer++;
+		NumberOfBytesToReceive--;
+	}
+
+	SPI_Trasmit(SD_IDLE_STATE_VALUE);//discard crc
+	SPI_Trasmit(SD_IDLE_STATE_VALUE);
+
+	return true;
 }
 
-bool SD_SendDataBlock(uint8_t* Buffer, uint16_t NumberOfBytesToSend){
+bool SD_SendDataBlock(uint8_t* Buffer, uint16_t NumberOfBytesToSend, uint8_t Token){
+	uint8_t ReceivedByte = 0;
+	uint8_t Timeout = 10;
 
+	//uint8_t ReceivedByte = __SD_WaitFor(2);
+
+	while(ReceivedByte != SD_IDLE_STATE_VALUE && Timeout != 0){
+		ReceivedByte = SPI_Trasmit(SD_IDLE_STATE_VALUE);
+		Timeout--;
+	}
+
+	SPI_Trasmit(Token);
+
+	if(Token == CMD25_STOP_TRAN_TOKEN){//exception for stop_tran_token -> maybe move to send single/multiple block function??
+		SPI_Trasmit(SD_IDLE_STATE_VALUE);
+
+		
+	}
+
+	while(NumberOfBytesToSend != 0){
+		SPI_Trasmit(*Buffer);
+		Buffer++;
+		NumberOfBytesToSend--;
+	}
+
+	SPI_Trasmit(0);//crc
+	SPI_Trasmit(0);
+
+	uint8_t DataResponse = SPI_Trasmit(SD_IDLE_STATE_VALUE);
+
+	uint8_t Response = SPI_Trasmit(SD_IDLE_STATE_VALUE);
+
+	while(Response != SD_IDLE_STATE_VALUE){
+		Response = SPI_Trasmit(SD_IDLE_STATE_VALUE);
+	}
+
+	return (DataResponse & DATA_RESPONSE_ACCEPTED);
 }
 
 
