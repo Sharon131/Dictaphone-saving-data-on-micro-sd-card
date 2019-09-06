@@ -62,7 +62,7 @@ void SystemClock_Config(void); // 180 MHz clock from 8 MHz XTAL and PLL
 
 void taskADCtoQue(void* params)
 {
-	WavQueue = xQueueCreate(100, sizeof(uint32_t));
+	
 	WavSemaphore = xSemaphoreCreateBinary();
 	
   while (1) 
@@ -91,7 +91,7 @@ void taskADCtoQue(void* params)
 
 void taskSDfromQue(void* params)
 {
-	WavQueue = xQueueCreate(100, sizeof(uint32_t));
+	
   while (1) 
 	{  			
 		if (xQueueReceive(WavQueue, &ADC1Data, 1000 ) == pdTRUE)  
@@ -111,12 +111,13 @@ int main(void)
   TRACE_Init();
 	EXTI2_Init();	
 	ADC1_Init(hadc1);		
+	WavQueue = xQueueCreate(100, sizeof(uint32_t));
 	
 	if (pdPASS != xTaskCreate(taskADCtoQue, "ADC to Queue", configMINIMAL_STACK_SIZE * 4, NULL, 4, &TxHandle)) 
 	{
 		USART_WriteString("hejka.\n\r");
 	}
-	if (pdPASS != xTaskCreate(taskSDfromQue, "Queue to SD", configMINIMAL_STACK_SIZE * 4, NULL, 3, &RxHandle)) 
+	if (pdPASS != xTaskCreate(taskSDfromQue, "Queue to SD", configMINIMAL_STACK_SIZE * 4, NULL, 2, &RxHandle)) 
 	{
 		USART_WriteString("hejka.\n\r");
 	}
@@ -206,7 +207,7 @@ WavFileHeader generateWaveHeader(uint32_t sampleRate, uint16_t numChannels, uint
 WaveFile makeWave(uint32_t sampleRate, uint16_t numChannels, uint16_t bitsPerSample)
 {
 	WaveFile newWave;
-	newWave.header = generateWaveHeader(sampleRate, numChannels, bitsPerSample)
+	newWave.header = generateWaveHeader(sampleRate, numChannels, bitsPerSample);
 	
 	return newWave;
 	
