@@ -9,6 +9,8 @@
 #include "adc1.h"
 #include "exti2.h"
 
+#define QUEUE_SIZE 10000
+
 extern volatile int tick_counter;
 int executionTime = 0;
 
@@ -83,7 +85,13 @@ void taskADCtoQue(void* params)
 				if(semaphoreState)
 				{
 						xSemaphoreGive(WavSemaphore);
-				}							
+				}
+				else
+				{
+					//ADC1_Stop(hadc1);
+					//xQueueReset(WavQueue);
+				}
+					
 			}	
 		}			
 	}
@@ -91,14 +99,17 @@ void taskADCtoQue(void* params)
 
 void taskSDfromQue(void* params)
 {
-	
   while (1) 
 	{  			
 		if (xQueueReceive(WavQueue, &ADC1Data, 1000 ) == pdTRUE)  
 		{
-			// element was received successfully
-			USART_WriteString("R");
+			// element was received successfully		
+			USART_WriteString("R");			
 		}				
+		//if(uxQueueSpacesAvailable(WavQueue) == QUEUE_SIZE)
+		//{
+		//	xQueueReset(WavQueue);
+		//}
 	}
 }
 
@@ -110,13 +121,15 @@ int main(void)
   USART_Init();
   TRACE_Init();
 	EXTI2_Init();	
-	ADC1_Init(hadc1);		
-	WavQueue = xQueueCreate(100, sizeof(uint32_t));
+	ADC1_Init(hadc1);	
 	
-	if (pdPASS != xTaskCreate(taskADCtoQue, "ADC to Queue", configMINIMAL_STACK_SIZE * 4, NULL, 4, &TxHandle)) 
+	WavQueue = xQueueCreate(QUEUE_SIZE, sizeof(uint32_t));
+	
+	if (pdPASS != xTaskCreate(taskADCtoQue, "ADC to Queue", configMINIMAL_STACK_SIZE * 4, NULL, 3, &TxHandle)) 
 	{
 		USART_WriteString("hejka.\n\r");
 	}
+	
 	if (pdPASS != xTaskCreate(taskSDfromQue, "Queue to SD", configMINIMAL_STACK_SIZE * 4, NULL, 2, &RxHandle)) 
 	{
 		USART_WriteString("hejka.\n\r");
