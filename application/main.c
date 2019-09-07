@@ -1,4 +1,7 @@
 #include "stm32f4xx_hal.h"
+#include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
 #include "led.h"
 #include "usart.h"
 #include "FreeRTOS.h"
@@ -8,171 +11,114 @@
 #include "string.h"
 #include "adc1.h"
 #include "exti2.h"
+#include "wav.h"
 
-#define QUEUE_SIZE 10000
+#define BUFFER_SIZE 256 // uint16 from adc
 
-extern volatile int tick_counter;
-int executionTime = 0;
+//FATFS myFATFS; //fatfs object
+// FIL myFILE; //file object
 
-static uint8_t semaphoreState;
-SemaphoreHandle_t WavSemaphore;
-SemaphoreHandle_t SdSemaphore;
-QueueHandle_t WavQueue;				 // Queue for ADC1 data
-uint32_t dataToSd[128];				 // SD card takes 512 bytes at one time
+static uint8_t adcState;
+SemaphoreHandle_t onOffSemaphore;
+SemaphoreHandle_t adcSemaphore;
+SemaphoreHandle_t sdSemaphore;
 
-ADC_HandleTypeDef *hadc1;			 // handle for ADC1
-uint32_t ADC1Data;   					 // 12 bit data from adc
+WaveFile *wavHandler;
+ADC_HandleTypeDef *adc1Handler;			 // handle for ADC1
 
-TaskHandle_t TxHandle = NULL;
-TaskHandle_t RxHandle = NULL;
+uint16_t dataToSd[BUFFER_SIZE]; // SD card takes 512 bytes at one time
 
-typedef struct 
-{															// [BE] = Big Endian, [LE] = Little Endian													
-		// The "RIFF" chunk descriptor: header
-	uint8_t ChunkID[4]; 						// 0x52 49 46 46 == "RIFF" [BE]
-	uint32_t ChunkSize;						// 36 + Subchunk2Size [LE]
-	uint8_t Format[4];							// 0x57 41 56 45 == "WAVE" [BE]
-		
-		// The "fmt" sub-chunk: sound data's format
-	uint8_t Subchunk1ID[4];					// 0x66 6d 74 20 = "fmt " [BE]
-	uint32_t Subchunk1Size;				// 16 for PCM, size of the rest of this subchunk [LE]
-	uint16_t AudioFormat;					// PCM = 1 (li near quantization) !=1 for compression [LE]
-	uint16_t NumChannels;					// mono = 1, Stereo = 2 [LE]
-	uint32_t SampleRate;					// 8000, 44100(most common), etc. [LE]
-	uint32_t ByteRate;						// == Sample Rate * NumChannels * BitsPerSample/8 [LE]
-	uint16_t BlockAlign;					// == NumChannels * BitsPerSample/8 [LE]
-																// Number of bytes for one sample including all channels	
-	uint16_t BitsPerSample;				// 8 bits = 8, 16 bits = 16, etc. [LE]
-		
-		// the "data" sub-chunk: size of data and actual sound
-	uint8_t Subchunk2ID[4];					// 0x64 61 74 61 == "data" [BE]
-	uint32_t Subchunk2Size;				// == NumSamples * NumChannels * BitsPerSample/8 [LE]
-	//uint8_t data[];	// actual sound data, [Subchunk2Size] [LE]
-} WavFileHeader;
-	
-typedef struct
-{
-		WavFileHeader header;
-	uint8_t* data;
-	uint64_t index;
-	uint64_t size;
-	uint64_t nSamples;
-} WaveFile;
-
-	WavFileHeader generateWaveHeader(uint32_t sampleRate, uint16_t numChannels, uint16_t bitsPerSample);
-	WaveFile makeWave(uint32_t sampleRate, uint16_t numChannels, uint16_t bitsPerSample);
-	
 void SystemClock_Config(void); // 180 MHz clock from 8 MHz XTAL and PLL
 
-/* //queue tasks
-void taskADCtoQue(void* params)
+void taskOnOff(void* params)
 {
-	
-	WavSemaphore = xSemaphoreCreateBinary();
+	static uint8_t fileCounter; // 10 .wav files maximum
 	
   while (1) 
-	{	 
-		if(WavSemaphore != NULL)
-		{
-			if(xSemaphoreTake(WavSemaphore, 1) == pdTRUE)
-			{		
-				//ADC1_Start(hadc1);
-				//ADC1Data = ADC1_Get_Value(hadc1);
-				ADC1Data = 1;
-				if (xQueueSend(WavQueue, &ADC1Data, 1000) != pdPASS)
-				{	
-						// Failed to put new element into the queue, even after 1000 ticks.			
-						USART_WriteString("*");				
-				}
-				USART_WriteString("T");
-				if(semaphoreState)
-				{
-						xSemaphoreGive(WavSemaphore);
-				}
-				else
-				{
-					//ADC1_Stop(hadc1);
-					//xQueueReset(WavQueue);
-				}
-					
-			}	
-		}			
-	}
-} 
-
-void taskSDfromQue(void* params)
-{
-  while (1) 
-	{  			
-		if (xQueueReceive(WavQueue, &ADC1Data, 1000 ) == pdTRUE)  
-		{
-			// element was received successfully		
-			USART_WriteString("R");			
-		}				
-		//if(uxQueueSpacesAvailable(WavQueue) == QUEUE_SIZE)
-		//{
-		//	xQueueReset(WavQueue);
-		//}
+	{
+		if(xSemaphoreTake(onOffSemaphore, portMAX_DELAY) == pdTRUE)
+		{	
+			
+			adcState = adcState ^ 1; 			// State switches between
+																		//1 - rising edge and 0 - falling edge of exti irq	
+			if(adcState) // dictaphone ON!
+			{	
+				xSemaphoreGiveFromISR(adcSemaphore, NULL);
+//				if(f_mount(&myFATFS, SD_Path, 1) == FR_OK)
+//				{
+//					char myPath[] = "file0.wav";
+//					myPath[4] = fileCounter;
+//					f_open(&myFILE, myPath, F_WRITE);
+//					
+//					
+//					
+//					wavHandler = &(makeWave(ADC1_Get_sampleRate(adc1Handler),
+//																						ADC1_Get_numChannels(adc1Handler),
+//																						ADC1_Get_bitsPerSample(adc1Handler)));
+//					?? f_write(wavHandler)
+//				}
+			
+			}
+			else // dictaphone OFF! 
+			{
+			
+			}
+		}
 	}
 }
-*/ //queue tasks
 
-void taskADCtoQue(void* params)
+void taskADCtoBuffer(void* params)
 {
-	
-	
-	
+	static uint32_t counter;
   while (1) 
 	{	 
-		static int counter;
-		if(WavSemaphore != NULL)
-		{
-			if(xSemaphoreTake(WavSemaphore, 1) == pdTRUE)
-			{		
-				ADC1Data = 1;					
-				
-				USART_WriteString("T");
-				
-				taskENTER_CRITICAL();				
-				dataToSd[counter] = ADC1Data;
-				counter += 1;
-				taskEXIT_CRITICAL();
-				
-				if(semaphoreState)
-				{
-					xSemaphoreGive(WavSemaphore);
-				}
-				else
-				{
-					xSemaphoreGive(SdSemaphore);
-				}
-				if(counter == 128)
-				{
-					xSemaphoreGive(SdSemaphore);
-					counter = 0;
-				}
-
-			}	
-		}			
-	}
+		if(xSemaphoreTake(adcSemaphore, 1) == pdTRUE)
+		{				
+			taskENTER_CRITICAL();	
+			//ADC1_Start(adc1Handler);
+		
+			USART_WriteString("T");				
+			//dataToSd[counter] = (uint16_t)ADC1_Get_Value(adc1Handler);;
+			counter += 1;
+					
+			if(adcState)
+			{
+				xSemaphoreGive(adcSemaphore);
+			}
+			else
+			{
+				//ADC1_Stop(adc1Handler);
+				xSemaphoreGive(sdSemaphore);
+			}
+			if(counter == BUFFER_SIZE)
+			{
+				counter = 0;
+				xSemaphoreGive(sdSemaphore);
+			}
+			taskEXIT_CRITICAL();
+		}	
+	}			
+	
 } 
 
-void taskSDfromQue(void* params)
+void taskBufferToSD(void* params)
 {
-	
-	
   while (1) 
 	{  			
-		if(xSemaphoreTake(SdSemaphore, portMAX_DELAY) == pdTRUE)
+		if(xSemaphoreTake(sdSemaphore, portMAX_DELAY) == pdTRUE)
 		{	
 			// 512 bytes were received successfully		
 			taskENTER_CRITICAL();			
-			USART_WriteString("\n\rR\n\r");			
-			memset(dataToSd, 0, sizeof(dataToSd));
+			USART_WriteString("\n\rELO\n\r");	
+			//for (i = 0 i < BUFFER_SIZE, i++)
+			//addWaveSample (dataToSD[i])
+			//f_write dataToSD
 			taskEXIT_CRITICAL();
+			//memset(dataToSd, 0, sizeof(dataToSd));
 		}			
 	}
 }
+
 
 
 int main(void)
@@ -183,20 +129,27 @@ int main(void)
   USART_Init();
   TRACE_Init();
 	EXTI2_Init();	
-	ADC1_Init(hadc1);	
+	ADC1_Init(adc1Handler);	
+	//SPI_Init()
+	//Fatfs_init()
 	
-	WavQueue = xQueueCreate(QUEUE_SIZE, sizeof(uint32_t));
-	WavSemaphore = xSemaphoreCreateBinary();
-	SdSemaphore = xSemaphoreCreateBinary();
+	adcSemaphore = xSemaphoreCreateBinary();
+	sdSemaphore = xSemaphoreCreateBinary();
+	onOffSemaphore = xSemaphoreCreateBinary();
 	
-	if (pdPASS != xTaskCreate(taskADCtoQue, "ADC to Queue", configMINIMAL_STACK_SIZE * 4, NULL, 2, &TxHandle)) 
+	if (pdPASS != xTaskCreate(taskOnOff, "Start and Finish logic", configMINIMAL_STACK_SIZE * 4, NULL, 3, NULL)) 
 	{
-		USART_WriteString("hejka.\n\r");
+		USART_WriteString("ON/OFF TASK ERROR.\n\r");
 	}
 	
-	if (pdPASS != xTaskCreate(taskSDfromQue, "Queue to SD", configMINIMAL_STACK_SIZE * 4, NULL, 3, &RxHandle)) 
+	if (pdPASS != xTaskCreate(taskADCtoBuffer, "ADC to Buffer", configMINIMAL_STACK_SIZE * 4, NULL, 2, NULL)) 
 	{
-		USART_WriteString("hejka.\n\r");
+		USART_WriteString("ADC TASK ERROR.\n\r");
+	}
+	
+	if (pdPASS != xTaskCreate(taskBufferToSD, "Buffer to SD", configMINIMAL_STACK_SIZE * 4, NULL, 3, NULL)) 
+	{
+		USART_WriteString("SD TASK ERROR.\n\r");
 	}
 	
   vTaskStartScheduler();
@@ -236,60 +189,6 @@ void SystemClock_Config(void)
 }
  
 
-WavFileHeader generateWaveHeader(uint32_t sampleRate, uint16_t numChannels, uint16_t bitsPerSample)
-{
-	//RIFF WAVE Header
-	WavFileHeader newHeader;
-	newHeader.ChunkID[0] = 'R';
-	newHeader.ChunkID[1] = 'I';
-	newHeader.ChunkID[2] = 'F';
-	newHeader.ChunkID[3] = 'F';
-	newHeader.Format[0] = 'W';
-	newHeader.Format[1] = 'A';
-	newHeader.Format[2] = 'V';
-	newHeader.Format[3] = 'E';
-	
-	//Format subchunk
-	newHeader.Subchunk1ID[0] = 'f';
-  newHeader.Subchunk1ID[1] = 'm';
-  newHeader.Subchunk1ID[2] = 't';
-  newHeader.Subchunk1ID[3] = ' ';
-	newHeader.AudioFormat = 1; // PCM
-	newHeader.NumChannels = numChannels;
-	newHeader.SampleRate = sampleRate; // most likely 44100 hertz
-	newHeader.BitsPerSample = bitsPerSample; // 
-  newHeader.ByteRate = newHeader.SampleRate * newHeader.NumChannels * newHeader.BitsPerSample / 8;
-  newHeader.BlockAlign = newHeader.NumChannels * newHeader.BitsPerSample/8;
-	
-	// Data subchunk
-  newHeader.Subchunk2ID[0] = 'd';
-  newHeader.Subchunk2ID[1] = 'a';
-  newHeader.Subchunk2ID[2] = 't';
-  newHeader.Subchunk2ID[3] = 'a';
-	
-	// All sizes:
-  // chuckSize = 4 + (8 + subChunk1Size) + (8 + subChubk2Size)
-  // subChunk1Size is constanst, i'm using 16 and staying with PCM
-  // subChunk2Size = nSamples * nChannels * bitsPerSample/8
-  // Whenever a sample is added:
-  //    chunkSize += (nChannels * bitsPerSample/8)
-  //    subChunk2Size += (nChannels * bitsPerSample/8)
-	newHeader.ChunkSize = 4+8+16+8+0;
-  newHeader.Subchunk1Size = 16;
-  newHeader.Subchunk2Size = 0;
-	
-	return newHeader;
-}
-
-WaveFile makeWave(uint32_t sampleRate, uint16_t numChannels, uint16_t bitsPerSample)
-{
-	WaveFile newWave;
-	newWave.header = generateWaveHeader(sampleRate, numChannels, bitsPerSample);
-	
-	return newWave;
-	
-}
-
 /**
  * This function handles External line 2 interrupt request.
  */
@@ -300,11 +199,6 @@ void EXTI2_IRQHandler(void)
 	{
 		__HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_2);			// Clear the interrupt (has to be done for EXTI)
 		HAL_GPIO_TogglePin(GPIOG, GPIO_PIN_14);	  // Toggle LED red 
-		
-		semaphoreState = semaphoreState ^ 1; 			// State switches between 1 - rising edge and 0 - falling edge		
-		if(semaphoreState)
-		{
-		xSemaphoreGiveFromISR(WavSemaphore, NULL);
-		}
+		xSemaphoreGiveFromISR(onOffSemaphore, NULL);	
   }
 }

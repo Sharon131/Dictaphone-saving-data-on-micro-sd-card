@@ -462,6 +462,16 @@
               <FileType>5</FileType>
               <FilePath>.\application\exti2.h</FilePath>
             </File>
+            <File>
+              <FileName>wav.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\application\wav.c</FilePath>
+            </File>
+            <File>
+              <FileName>wav.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\application\wav.h</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

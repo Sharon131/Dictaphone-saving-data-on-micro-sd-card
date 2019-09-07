@@ -1,6 +1,5 @@
 /* Includes ------------------------------------------------------------------*/
 #include "core.h"
-#include "stm32f4xx_hal.h"
 
 
 void CORE_EnterCriticalSection(void){	

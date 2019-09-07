@@ -24,9 +24,7 @@ void ADC1_Init(ADC_HandleTypeDef *hadc)
   sConfig.Rank = 1;																								 // 1 position in measurments queue
   sConfig.SamplingTime = ADC_SAMPLETIME_480CYCLES; 								 // Conversion time 480 clock cycles, wchich is maximum
 	// sampling rate is about 44KHz: 180000000/(8*480) = 46875Hz
-	// Final conversion time will be (8 * (480 + 12(constant cycles)) ) / (ADC clock = 180MHz)
-	
-	
+	// Final conversion time will be (8 * (480 + 12(constant cycles)) ) / (ADC clock = 180MHz)	
 }
 
 void ADC1_Start(ADC_HandleTypeDef* hadc)
@@ -51,4 +49,19 @@ uint32_t ADC1_Get_Value(ADC_HandleTypeDef* hadc)
 		return HAL_ADC_GetValue(hadc);
 	}
 	return 0;
+}
+
+uint32_t ADC1_Get_sampleRate(ADC_HandleTypeDef* hadc)
+{
+	return 46875;
+}
+
+uint16_t ADC1_Get_numChannels(ADC_HandleTypeDef* hadc)
+{
+	return 1;
+}
+
+uint16_t ADC1_Get_bitsPerSample(ADC_HandleTypeDef* hadc)
+{
+	return 12;
 }
