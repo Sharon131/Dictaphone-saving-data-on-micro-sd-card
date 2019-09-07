@@ -8,12 +8,11 @@
 
 void SPI_Init(bool Polarity, bool Phase);
 
+bool SD_IsCardReady(void);
+
 void SPI_SelectDevice(void);
 void SPI_DeselectDevice(void);
 
-uint8_t SPI_Trasmit(uint8_t CharacterToSend);
-
-void SPI_Send(uint8_t* MessageToSend, size_t BytesToSend);
-void SPI_Read(uint8_t* MessageReceived, size_t SizeOfBuffer);
+uint8_t SPI_Transmit(uint8_t CharacterToSend);
 
 #endif

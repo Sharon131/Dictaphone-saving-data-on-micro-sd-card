@@ -1,5 +1,4 @@
 #include "sd_card.h"
-#include "spi.h"
 
 #define SPI_POL_IN_SDCARD_MODE	1
 #define SPI_PHA_IN_SDCARD_MODE	1
@@ -51,11 +50,11 @@ static uint8_t MessageBuffer[10];
 
 /* Idles MOSI line for MaxNoOfByteCycles Clock Cycles * 8. 
 	MaxNoOfByteCycles -> Number of empty bytes to send. */
-uint8_t __SD_WaitFor(uint8_t MaxNoOfByteCycles){
+uint8_t SD_WaitFor(uint8_t MaxNoOfByteCycles){
 	uint8_t ByteReceived = SD_IDLE_STATE_VALUE;
 
 	while(MaxNoOfByteCycles != 0 && ByteReceived == SD_IDLE_STATE_VALUE){
-		ByteReceived = SPI_Trasmit(SD_IDLE_STATE_VALUE);
+		ByteReceived = SPI_Transmit(SD_IDLE_STATE_VALUE);
 		MaxNoOfByteCycles--;
 	}
 
@@ -63,19 +62,13 @@ uint8_t __SD_WaitFor(uint8_t MaxNoOfByteCycles){
 }
 
 bool __SD_IsCardReady(void){
-	return (SPI_Trasmit(SD_IDLE_STATE_VALUE) == SD_IDLE_STATE_VALUE);
+	return (SPI_Transmit(SD_IDLE_STATE_VALUE) == SD_IDLE_STATE_VALUE);
 }
 
 /* Sends clock signal 10 times to synchronize. */
 void __SD_InitClockSignal(void){
 	
-	for(uint8_t index =0 ; index < 10; index++){
-		MessageBuffer[index] = 0xFF;
-	}
-	
-	SPI_Send(MessageBuffer, 10);
-
-    MessageBuffer[SD_LENGTH_OF_COMMAND] = 0;
+	SD_WaitFor(10);
 }
 
 /* Send command to change to SPI mode from SDIO mode. */
@@ -87,7 +80,7 @@ void __SD_InitChangeToSPI_Mode(void){
 void SD_Init(void){//TODO: correct
 	uint16_t Timeout = 60000;
     
-    SPI_Init(SPI_POL_IN_SDCARD_MODE, SPI_PHA_IN_SDCARD_MODE);
+  SPI_Init(SPI_POL_IN_SDCARD_MODE, SPI_PHA_IN_SDCARD_MODE);
 	
 	SPI_DeselectDevice();
 	
@@ -97,40 +90,39 @@ void SD_Init(void){//TODO: correct
 	
 	__SD_InitChangeToSPI_Mode();
 	
-	//uint8_t ByteReceived = __SD_WaitFor(100);//wait for 0x01 response
 	
 	SPI_DeselectDevice();
 
-	__SD_WaitFor(1);
+	SD_WaitFor(1);
 }
 
 
 
 uint8_t SD_SendCommand(uint8_t CommandToSend, uint32_t ArgsForCommand){
 	
-	SPI_Trasmit(CommandToSend);
-	SPI_Trasmit((uint8_t)(ArgsForCommand >> 24));
-	SPI_Trasmit((uint8_t)(ArgsForCommand >> 16));
-	SPI_Trasmit((uint8_t)(ArgsForCommand >> 8));
-	SPI_Trasmit((uint8_t)ArgsForCommand);
+	SPI_Transmit(CommandToSend);
+	SPI_Transmit((uint8_t)(ArgsForCommand >> 24));
+	SPI_Transmit((uint8_t)(ArgsForCommand >> 16));
+	SPI_Transmit((uint8_t)(ArgsForCommand >> 8));
+	SPI_Transmit((uint8_t)ArgsForCommand);
 	
 	if(CommandToSend == CMD0){
-		SPI_Trasmit(SD_CMD0_CRC_VALUE);
+		SPI_Transmit(SD_CMD0_CRC_VALUE);
 	} else if (CommandToSend == CMD8) {
-		SPI_Trasmit(SD_CMD8_CRC_VALUE);
+		SPI_Transmit(SD_CMD8_CRC_VALUE);
 	} else {
-		SPI_Trasmit(0);
+		SPI_Transmit(0);
 	}
 
 	if(CommandToSend == CMD12){
-		SPI_Trasmit(SD_IDLE_STATE_VALUE);//discard received data
+		SPI_Transmit(SD_IDLE_STATE_VALUE);//discard received data
 	}
 
 	uint8_t Timeout = 10;
 	uint8_t Response = 0x80;
 
 	while( (Response & 0x80) != 0 && Timeout != 0){
-		Response = SPI_Trasmit(SD_IDLE_STATE_VALUE);
+		Response = SPI_Transmit(SD_IDLE_STATE_VALUE);
 		Timeout--;
 	}
 
@@ -138,38 +130,40 @@ uint8_t SD_SendCommand(uint8_t CommandToSend, uint32_t ArgsForCommand){
 }
 
 bool SD_ReceiveDataPacket(uint8_t* Buffer, uint16_t NumberOfBytesToReceive){
-	uint8_t ReceivedToken = __SD_WaitFor(10)
+	uint8_t ReceivedToken = SD_WaitFor(10);
 
 	if(ReceivedToken != CMD17_18_24_DATA_TOKEN)		return false;
 
 	while(NumberOfBytesToReceive != 0){
-		*Buffer = SPI_Trasmit(SD_IDLE_STATE_VALUE);
+		*Buffer = SPI_Transmit(SD_IDLE_STATE_VALUE);
 		Buffer++;
 		NumberOfBytesToReceive--;
 	}
 
-	SPI_Trasmit(SD_IDLE_STATE_VALUE);//discard crc
-	SPI_Trasmit(SD_IDLE_STATE_VALUE);
+	SPI_Transmit(SD_IDLE_STATE_VALUE);//discard crc
+	SPI_Transmit(SD_IDLE_STATE_VALUE);
 
 	return true;
 }
 
-bool SD_SingleBlockRead(uint8_t* Buffer){
-	uint8_t CommandResponse = SD_SendCommand(CMD17, );//TODO: add address as arg
+bool SD_SingleBlockRead(uint8_t* Buffer, uint32_t Address){
+	uint8_t CommandResponse = SD_SendCommand(CMD17, Address);
 
 	if(CommandResponse != 0)		return false;
 
 	bool WasReadSuccessful = SD_ReceiveDataPacket(Buffer, SD_DATA_BLOCK_SIZE);
 
-	__SD_WaitFor(2);//just in case
+	SD_WaitFor(2);//just in case
 
 	return WasReadSuccessful;
 }
 
-bool SD_MultipleBlockRead(uint8_t* Buffer, uint16_t NoOfBlockToRead){
+bool SD_MultipleBlocksRead(uint8_t* Buffer, uint16_t NoOfBlockToRead, uint32_t Address){
+	if(NoOfBlockToRead == 0)		return false;
+	
 	bool WasReadSuccessful = 0;
 	
-	uint8_t CommandResponse = SD_SendCommand(CMD18, );//TODO: add address as arg
+	uint8_t CommandResponse = SD_SendCommand(CMD18, Address);
 
 	if(CommandResponse != 0)		return false;
 
@@ -189,20 +183,20 @@ bool SD_MultipleBlockRead(uint8_t* Buffer, uint16_t NoOfBlockToRead){
 
 bool SD_SendDataPacket(uint8_t* Buffer, uint16_t NumberOfBytesToSend, uint8_t Token){
 
-	uint8_t ReceivedByte = __SD_WaitFor(2);
+	uint8_t ReceivedByte = SD_WaitFor(2);
 
-	SPI_Trasmit(Token);
+	SPI_Transmit(Token);
 
 	while(NumberOfBytesToSend != 0){
-		SPI_Trasmit(*Buffer);
+		SPI_Transmit(*Buffer);
 		Buffer++;
 		NumberOfBytesToSend--;
 	}
 
-	SPI_Trasmit(SD_IDLE_STATE_VALUE);//crc
-	SPI_Trasmit(SD_IDLE_STATE_VALUE);
+	SPI_Transmit(SD_IDLE_STATE_VALUE);//crc
+	SPI_Transmit(SD_IDLE_STATE_VALUE);
 
-	uint8_t DataResponse = SPI_Trasmit(SD_IDLE_STATE_VALUE);
+	uint8_t DataResponse = SPI_Transmit(SD_IDLE_STATE_VALUE);
 
 	while(!__SD_IsCardReady());
 
@@ -214,17 +208,17 @@ bool SD_SendSingleBlock(uint8_t* Buffer){
 
 	if(CommandResponse != 0)		return false;
 
-	__SD_WaitFor(2);
+	SD_WaitFor(2);
 
 	bool WasWriteSuccessful = SD_SendDataPacket(Buffer, SD_DATA_BLOCK_SIZE, CMD17_18_24_DATA_TOKEN);
 }
 
-bool SD_SendMultipleBlock(uint8_t* Buffer, uint16_t NoOfBlockToSend){
+bool SD_SendMultipleBlocks(uint8_t* Buffer, uint16_t NoOfBlockToSend){
 	uint8_t CommandResponse = SD_SendCommand(CMD25, );//TODO: add address
 
 	if(CommandResponse != 0)		return false;
 
-	__SD_WaitFor(2);
+	SD_WaitFor(2);
 
 	while(NoOfBlockToSend != 0){
 		bool WasWriteSuccessful = SD_SendDataPacket(Buffer, SD_DATA_BLOCK_SIZE, CMD25_DATA_TOKEN);
@@ -235,5 +229,5 @@ bool SD_SendMultipleBlock(uint8_t* Buffer, uint16_t NoOfBlockToSend){
 		Buffer += 512;
 	}
 
-	SPI_Trasmit(CMD25_STOP_TRAN_TOKEN);
+	SPI_Transmit(CMD25_STOP_TRAN_TOKEN);
 }

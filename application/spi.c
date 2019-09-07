@@ -94,7 +94,11 @@ void SPI_DeselectDevice(void){
     HAL_GPIO_WritePin(SPI_CS_Port, SPI_CS_Pin, GPIO_PIN_SET);
 }
 
-uint8_t SPI_Trasmit(uint8_t CharacterToSend){//assumed the Pol=1 and Phas=1, just like in sd card comm
+bool SD_IsCardReady(void){
+	return (SPI_Transmit(0xff) == 0xff);
+}
+
+uint8_t SPI_Transmit(uint8_t CharacterToSend){//assumed the Pol=1 and Phas=1, just like in sd card comm
 	uint8_t ShiftRegister = CharacterToSend;
 
 
@@ -130,23 +134,4 @@ uint8_t SPI_Trasmit(uint8_t CharacterToSend){//assumed the Pol=1 and Phas=1, jus
 	}
 	
   return ShiftRegister;
-}
-
-void SPI_Send(uint8_t* MessageToSend, size_t BytesToSend){//not needed -> move to sd card file
-
-    while(*MessageToSend != 0 && BytesToSend != 0){
-        SPI_Trasmit(*MessageToSend);
-        MessageToSend++;
-				BytesToSend--;
-    }
-}
-
-void SPI_Read(uint8_t* MessageReceived, size_t SizeOfBuffer){//not needed -> move to sd card file
-	uint16_t index = 0;
-
-    while(index != SizeOfBuffer){
-        *MessageReceived = SPI_Trasmit(EMPTY_MSG_VALUE);
-        MessageReceived++;
-        index++;
-    }
 }

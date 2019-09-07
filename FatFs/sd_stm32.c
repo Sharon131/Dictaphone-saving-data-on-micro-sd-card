@@ -10,11 +10,12 @@
 
 #include "stm32f4xx_hal.h"
 
-#include "ff.h"
-#include "diskio.h"
-//#include "spi.h"
 #include <stdint.h>
 
+#include "ff.h"
+#include "diskio.h"
+
+#include "spi.h"
 #include "sd_stm32.h"
 
 /* Definitions for MMC/SDC command */
@@ -51,32 +52,28 @@ static BYTE PowerFlag = 0; /* indicates if "power" is on */
 static
 void SELECT(void)
 {
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
+	SPI_SelectDevice();
 }
 
 static
 void DESELECT(void)
 {
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
+	SPI_DeselectDevice();
 }
 
 static
 void xmit_spi(BYTE Data)
 {
-	while (HAL_SPI_GetState(&hspi2) != HAL_SPI_STATE_READY);
-	HAL_SPI_Transmit(&hspi2, &Data, 1, 5000);
+	while (!SD_IsCardReady());
+	SPI_Transmit(Data);
 }
 
 static BYTE rcvr_spi(void)
 {
-	unsigned char Dummy, Data;
-	Dummy = 0xFF;
-	Data = 0;
-	while ((HAL_SPI_GetState(&hspi2) != HAL_SPI_STATE_READY))
-		;
-	HAL_SPI_TransmitReceive(&hspi2, &Dummy, &Data, 1, 5000);
+	while (!SD_IsCardReady());
+	uint8_t DataReceived = SPI_Transmit(0xff);
 
-	return Data;
+	return DataReceived;
 }
 
 static
