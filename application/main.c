@@ -38,12 +38,12 @@ void taskOnOff(void* params)
 	{
 		if(xSemaphoreTake(onOffSemaphore, portMAX_DELAY) == pdTRUE)
 		{	
-			
+			HAL_GPIO_TogglePin(GPIOG, GPIO_PIN_14);	  // Toggle LED red 			
 			adcState = adcState ^ 1; 			// State switches between
 																		//1 - rising edge and 0 - falling edge of exti irq	
 			if(adcState) // dictaphone ON!
 			{	
-				xSemaphoreGiveFromISR(adcSemaphore, NULL);
+				xSemaphoreGive(adcSemaphore);
 //				if(f_mount(&myFATFS, SD_Path, 1) == FR_OK)
 //				{
 //					char myPath[] = "file0.wav";
@@ -61,7 +61,8 @@ void taskOnOff(void* params)
 			}
 			else // dictaphone OFF! 
 			{
-			
+//				f_close(myFILE)
+//				fileCounter++;
 			}
 		}
 	}
@@ -74,13 +75,19 @@ void taskADCtoBuffer(void* params)
 	{	 
 		if(xSemaphoreTake(adcSemaphore, 1) == pdTRUE)
 		{				
-			taskENTER_CRITICAL();	
+			vTaskSuspendAll();
+			//taskENTER_CRITICAL();	
 			//ADC1_Start(adc1Handler);
+			
+			USART_WriteString("T");		
 		
-			USART_WriteString("T");				
 			//dataToSd[counter] = (uint16_t)ADC1_Get_Value(adc1Handler);;
 			counter += 1;
-					
+			if(counter == BUFFER_SIZE - 1)
+			{
+				counter = 0;
+				xSemaphoreGive(sdSemaphore);
+			}
 			if(adcState)
 			{
 				xSemaphoreGive(adcSemaphore);
@@ -89,16 +96,11 @@ void taskADCtoBuffer(void* params)
 			{
 				//ADC1_Stop(adc1Handler);
 				xSemaphoreGive(sdSemaphore);
-			}
-			if(counter == BUFFER_SIZE)
-			{
-				counter = 0;
-				xSemaphoreGive(sdSemaphore);
-			}
-			taskEXIT_CRITICAL();
+			}				
+			//taskEXIT_CRITICAL();
+			xTaskResumeAll();
 		}	
 	}			
-	
 } 
 
 void taskBufferToSD(void* params)
@@ -107,13 +109,15 @@ void taskBufferToSD(void* params)
 	{  			
 		if(xSemaphoreTake(sdSemaphore, portMAX_DELAY) == pdTRUE)
 		{	
-			// 512 bytes were received successfully		
-			taskENTER_CRITICAL();			
+			// 512 bytes were received successfully
+			vTaskSuspendAll();			
+			taskENTER_CRITICAL();		
 			USART_WriteString("\n\rELO\n\r");	
+			taskEXIT_CRITICAL();
+			xTaskResumeAll();
 			//for (i = 0 i < BUFFER_SIZE, i++)
 			//addWaveSample (dataToSD[i])
-			//f_write dataToSD
-			taskEXIT_CRITICAL();
+			//f_write dataToSD	
 			//memset(dataToSd, 0, sizeof(dataToSd));
 		}			
 	}
@@ -198,7 +202,6 @@ void EXTI2_IRQHandler(void)
   if(__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_2) != RESET)  
 	{
 		__HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_2);			// Clear the interrupt (has to be done for EXTI)
-		HAL_GPIO_TogglePin(GPIOG, GPIO_PIN_14);	  // Toggle LED red 
 		xSemaphoreGiveFromISR(onOffSemaphore, NULL);	
   }
 }

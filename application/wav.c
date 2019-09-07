@@ -2,8 +2,14 @@
 
 WavFileHeader generateWaveHeader(uint32_t sampleRate, uint16_t numChannels, uint16_t bitsPerSample)
 {
+	uint8_t sysIsLittle = 0;
+	if(isLittleEndian())
+	{
+		sysIsLittle = 1;
+	}
 	//RIFF WAVE Header
 	WavFileHeader newHeader;
+	
 	newHeader.ChunkID[0] = 'R';
 	newHeader.ChunkID[1] = 'I';
 	newHeader.ChunkID[2] = 'F';
@@ -11,13 +17,22 @@ WavFileHeader generateWaveHeader(uint32_t sampleRate, uint16_t numChannels, uint
 	newHeader.Format[0] = 'W';
 	newHeader.Format[1] = 'A';
 	newHeader.Format[2] = 'V';
-	newHeader.Format[3] = 'E';
-	
+	newHeader.Format[3] = 'E';	
+
 	//Format subchunk
 	newHeader.Subchunk1ID[0] = 'f';
   newHeader.Subchunk1ID[1] = 'm';
   newHeader.Subchunk1ID[2] = 't';
   newHeader.Subchunk1ID[3] = ' ';
+	
+	if(sysIsLittle)
+	{
+		reverseEndianness(&newHeader.ChunkID, 4);
+		reverseEndianness(&newHeader.Format, 4);
+		reverseEndianness(&newHeader.Subchunk1ID, 4);
+	}
+	
+	
 	newHeader.AudioFormat = 1; // PCM
 	newHeader.NumChannels = numChannels;
 	newHeader.SampleRate = sampleRate; // most likely 44100 hertz
@@ -30,6 +45,11 @@ WavFileHeader generateWaveHeader(uint32_t sampleRate, uint16_t numChannels, uint
   newHeader.Subchunk2ID[1] = 'a';
   newHeader.Subchunk2ID[2] = 't';
   newHeader.Subchunk2ID[3] = 'a';
+	
+	if(sysIsLittle)
+	{
+		reverseEndianness(&newHeader.Subchunk2ID, 4);
+	}
 	
 	// All sizes:
   // chuckSize = 4 + (8 + subChunk1Size) + (8 + subChubk2Size)

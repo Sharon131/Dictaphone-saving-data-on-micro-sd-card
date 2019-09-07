@@ -2,7 +2,8 @@
 #define _WAV_H_
 
 #include "stm32f4xx_hal.h"
-#include <stdint.h>
+#include "stdint.h"
+#include "core.h"
 
 typedef struct 
 {															// [BE] = Big Endian, [LE] = Little Endian													
