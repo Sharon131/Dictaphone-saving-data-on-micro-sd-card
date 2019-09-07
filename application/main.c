@@ -16,7 +16,10 @@ int executionTime = 0;
 
 static uint8_t semaphoreState;
 SemaphoreHandle_t WavSemaphore;
+SemaphoreHandle_t SdSemaphore;
 QueueHandle_t WavQueue;				 // Queue for ADC1 data
+uint32_t dataToSd[128];				 // SD card takes 512 bytes at one time
+
 ADC_HandleTypeDef *hadc1;			 // handle for ADC1
 uint32_t ADC1Data;   					 // 12 bit data from adc
 
@@ -61,7 +64,7 @@ typedef struct
 	
 void SystemClock_Config(void); // 180 MHz clock from 8 MHz XTAL and PLL
 
-
+/* //queue tasks
 void taskADCtoQue(void* params)
 {
 	
@@ -112,6 +115,65 @@ void taskSDfromQue(void* params)
 		//}
 	}
 }
+*/ //queue tasks
+
+void taskADCtoQue(void* params)
+{
+	
+	
+	
+  while (1) 
+	{	 
+		static int counter;
+		if(WavSemaphore != NULL)
+		{
+			if(xSemaphoreTake(WavSemaphore, 1) == pdTRUE)
+			{		
+				ADC1Data = 1;					
+				
+				USART_WriteString("T");
+				
+				taskENTER_CRITICAL();				
+				dataToSd[counter] = ADC1Data;
+				counter += 1;
+				taskEXIT_CRITICAL();
+				
+				if(semaphoreState)
+				{
+					xSemaphoreGive(WavSemaphore);
+				}
+				else
+				{
+					xSemaphoreGive(SdSemaphore);
+				}
+				if(counter == 128)
+				{
+					xSemaphoreGive(SdSemaphore);
+					counter = 0;
+				}
+
+			}	
+		}			
+	}
+} 
+
+void taskSDfromQue(void* params)
+{
+	
+	
+  while (1) 
+	{  			
+		if(xSemaphoreTake(SdSemaphore, portMAX_DELAY) == pdTRUE)
+		{	
+			// 512 bytes were received successfully		
+			taskENTER_CRITICAL();			
+			USART_WriteString("\n\rR\n\r");			
+			memset(dataToSd, 0, sizeof(dataToSd));
+			taskEXIT_CRITICAL();
+		}			
+	}
+}
+
 
 int main(void)
 {
@@ -124,13 +186,15 @@ int main(void)
 	ADC1_Init(hadc1);	
 	
 	WavQueue = xQueueCreate(QUEUE_SIZE, sizeof(uint32_t));
+	WavSemaphore = xSemaphoreCreateBinary();
+	SdSemaphore = xSemaphoreCreateBinary();
 	
-	if (pdPASS != xTaskCreate(taskADCtoQue, "ADC to Queue", configMINIMAL_STACK_SIZE * 4, NULL, 3, &TxHandle)) 
+	if (pdPASS != xTaskCreate(taskADCtoQue, "ADC to Queue", configMINIMAL_STACK_SIZE * 4, NULL, 2, &TxHandle)) 
 	{
 		USART_WriteString("hejka.\n\r");
 	}
 	
-	if (pdPASS != xTaskCreate(taskSDfromQue, "Queue to SD", configMINIMAL_STACK_SIZE * 4, NULL, 2, &RxHandle)) 
+	if (pdPASS != xTaskCreate(taskSDfromQue, "Queue to SD", configMINIMAL_STACK_SIZE * 4, NULL, 3, &RxHandle)) 
 	{
 		USART_WriteString("hejka.\n\r");
 	}
