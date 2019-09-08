@@ -204,7 +204,7 @@ bool SD_SendDataPacket(uint8_t* Buffer, uint16_t NumberOfBytesToSend, uint8_t To
 }
 
 bool SD_SendSingleBlock(uint8_t* Buffer){
-	uint8_t CommandResponse = SD_SendCommand(CMD24, );//TODO: add address
+	uint8_t CommandResponse; // = SD_SendCommand(CMD24, );//TODO: add address
 
 	if(CommandResponse != 0)		return false;
 
@@ -214,7 +214,7 @@ bool SD_SendSingleBlock(uint8_t* Buffer){
 }
 
 bool SD_SendMultipleBlocks(uint8_t* Buffer, uint16_t NoOfBlockToSend){
-	uint8_t CommandResponse = SD_SendCommand(CMD25, );//TODO: add address
+	uint8_t CommandResponse; // = SD_SendCommand(CMD25, );//TODO: add address
 
 	if(CommandResponse != 0)		return false;
 

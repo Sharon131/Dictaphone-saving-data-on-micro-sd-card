@@ -8,6 +8,7 @@
 #include "string.h"
 #include "ff.h"
 #include "diskio.h"
+#include "sd_stm32.h"
 
 extern volatile int tick_counter;
 int executionTime = 0;
@@ -34,56 +35,25 @@ static void EXTI2_Init(void);
 void EXTI2_IRQHandler(void);
 void USART_POLL_WriteString(const char *string);
 
-void taskLED(void* params)
-{
-	TickType_t start = xTaskGetTickCount();
-  while (params) {
-    HAL_GPIO_TogglePin(((BlinkParams*)params)->gpio, ((BlinkParams*)params)->pin);
-		vTaskDelayUntil(&start,((BlinkParams*)params)->ticks);
-  }
-  
-  vTaskDelete(NULL);
-} 
-
-void taskButton(void* params)
-{
-	while(1)
-	{
-		if(mySemaphore != NULL)
-		{
-			if(xSemaphoreTake(mySemaphore, portMAX_DELAY))
-			{
-				HAL_GPIO_TogglePin(GPIOG, GPIO_PIN_13);
-			}	
-		}
-	}
-}
 
 int main(void)
 {
-    HAL_Init();
-		SystemClock_Config();
-    LED_Init();
-		EXTI2_Init();	
-	  mySemaphore = xSemaphoreCreateBinary();
-		myMutex = xSemaphoreCreateBinary();
-		xSemaphoreGive(myMutex);
-    TaskHandle_t taskHandle;
-	
-//    if (pdPASS != xTaskCreate(taskLED, "led1", configMINIMAL_STACK_SIZE, &bp1, 3, &taskHandle)) {
-//        vTaskSetApplicationTaskTag(taskHandle, (void*)101);
-//				printf("ERROR: Unable to create task!\n");
-//    }
-//    if (pdPASS != xTaskCreate(taskLED, "led2", configMINIMAL_STACK_SIZE, &bp2, 3, &taskHandle)) {
-//				vTaskSetApplicationTaskTag(taskHandle, (void*)102);
-//        printf("ERROR: Unable to create task!\n");
-//    }
-		if (pdPASS != xTaskCreate(taskButton, "button", configMINIMAL_STACK_SIZE, &buttonp, 3, &taskHandle)) {
-				vTaskSetApplicationTaskTag(taskHandle, (void*)103);
-        printf("ERROR: Unable to create task!\n");
-    }
+  HAL_Init();
+	SystemClock_Config();
+  LED_Init();
+	EXTI2_Init();	
 		
-    vTaskStartScheduler();
+	uint16_t timer = 0;
+	
+	
+	
+	while(1){
+		timer--;
+		
+		if(timer == 0){
+			sdcard_systick_timerproc();
+		}
+	}
 }
 
 
