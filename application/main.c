@@ -42,17 +42,12 @@ int main(void)
 	SystemClock_Config();
   LED_Init();
 	EXTI2_Init();	
-		
-	uint16_t timer = 0;
+	TimerInit();
 	
 	
 	
 	while(1){
-		timer--;
-		
-		if(timer == 0){
-			sdcard_systick_timerproc();
-		}
+		;
 	}
 }
 
@@ -84,6 +79,7 @@ void SystemClock_Config(void) {
                                 RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
   HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5);
