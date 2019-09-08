@@ -12,11 +12,14 @@
 #include "adc1.h"
 #include "exti2.h"
 #include "wav.h"
+#include "timers.h"
 
 #define BUFFER_SIZE 256 // uint16 from adc
 
 //FATFS myFATFS; //fatfs object
 // FIL myFILE; //file object
+
+TimerHandle_t sdTimer;
 
 static uint8_t adcState;
 SemaphoreHandle_t onOffSemaphore;
@@ -29,6 +32,8 @@ ADC_HandleTypeDef *adc1Handler;			 // handle for ADC1
 uint16_t dataToSd[BUFFER_SIZE]; // SD card takes 512 bytes at one time
 
 void SystemClock_Config(void); // 180 MHz clock from 8 MHz XTAL and PLL
+
+void timerFunction(void);
 
 void taskOnOff(void* params)
 {
@@ -141,20 +146,24 @@ int main(void)
 	sdSemaphore = xSemaphoreCreateBinary();
 	onOffSemaphore = xSemaphoreCreateBinary();
 	
-	if (pdPASS != xTaskCreate(taskOnOff, "Start and Finish logic", configMINIMAL_STACK_SIZE * 4, NULL, 3, NULL)) 
-	{
-		USART_WriteString("ON/OFF TASK ERROR.\n\r");
-	}
+	sdTimer = xTimerCreate("Timerek", 1000, pdTRUE, (void*)0, timerFunction);
+	xTimerStart(sdTimer, 0);
 	
-	if (pdPASS != xTaskCreate(taskADCtoBuffer, "ADC to Buffer", configMINIMAL_STACK_SIZE * 4, NULL, 2, NULL)) 
-	{
-		USART_WriteString("ADC TASK ERROR.\n\r");
-	}
 	
-	if (pdPASS != xTaskCreate(taskBufferToSD, "Buffer to SD", configMINIMAL_STACK_SIZE * 4, NULL, 3, NULL)) 
-	{
-		USART_WriteString("SD TASK ERROR.\n\r");
-	}
+//	if (pdPASS != xTaskCreate(taskOnOff, "Start and Finish logic", configMINIMAL_STACK_SIZE * 4, NULL, 3, NULL)) 
+//	{
+//		USART_WriteString("ON/OFF TASK ERROR.\n\r");
+//	}
+//	
+//	if (pdPASS != xTaskCreate(taskADCtoBuffer, "ADC to Buffer", configMINIMAL_STACK_SIZE * 4, NULL, 2, NULL)) 
+//	{
+//		USART_WriteString("ADC TASK ERROR.\n\r");
+//	}
+//	
+//	if (pdPASS != xTaskCreate(taskBufferToSD, "Buffer to SD", configMINIMAL_STACK_SIZE * 4, NULL, 3, NULL)) 
+//	{
+//		USART_WriteString("SD TASK ERROR.\n\r");
+//	}
 	
   vTaskStartScheduler();
 }
@@ -192,6 +201,11 @@ void SystemClock_Config(void)
   HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5);
 }
  
+void timerFunction(void)
+{
+		HAL_GPIO_TogglePin(GPIOG, GPIO_PIN_14);
+}
+
 /**
  * This function handles External line 2 interrupt request.
  */
