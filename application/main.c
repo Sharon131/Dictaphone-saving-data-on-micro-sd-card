@@ -150,20 +150,20 @@ int main(void)
 	xTimerStart(sdTimer, 0);
 	
 	
-//	if (pdPASS != xTaskCreate(taskOnOff, "Start and Finish logic", configMINIMAL_STACK_SIZE * 4, NULL, 3, NULL)) 
-//	{
-//		USART_WriteString("ON/OFF TASK ERROR.\n\r");
-//	}
-//	
-//	if (pdPASS != xTaskCreate(taskADCtoBuffer, "ADC to Buffer", configMINIMAL_STACK_SIZE * 4, NULL, 2, NULL)) 
-//	{
-//		USART_WriteString("ADC TASK ERROR.\n\r");
-//	}
-//	
-//	if (pdPASS != xTaskCreate(taskBufferToSD, "Buffer to SD", configMINIMAL_STACK_SIZE * 4, NULL, 3, NULL)) 
-//	{
-//		USART_WriteString("SD TASK ERROR.\n\r");
-//	}
+	if (pdPASS != xTaskCreate(taskOnOff, "Start and Finish logic", configMINIMAL_STACK_SIZE * 4, NULL, 3, NULL)) 
+	{
+		USART_WriteString("ON/OFF TASK ERROR.\n\r");
+	}
+	
+	if (pdPASS != xTaskCreate(taskADCtoBuffer, "ADC to Buffer", configMINIMAL_STACK_SIZE * 4, NULL, 2, NULL)) 
+	{
+		USART_WriteString("ADC TASK ERROR.\n\r");
+	}
+	
+	if (pdPASS != xTaskCreate(taskBufferToSD, "Buffer to SD", configMINIMAL_STACK_SIZE * 4, NULL, 3, NULL)) 
+	{
+		USART_WriteString("SD TASK ERROR.\n\r");
+	}
 	
   vTaskStartScheduler();
 }
