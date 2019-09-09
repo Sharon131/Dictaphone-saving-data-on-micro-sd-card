@@ -134,9 +134,9 @@ int main(void)
 {
 	HAL_Init();
 	SystemClock_Config();
-  LED_Init();
-  USART_Init();
-  TRACE_Init();
+    LED_Init();
+    USART_Init();
+    TRACE_Init();
 	EXTI2_Init();	
 	ADC1_Init(adc1Handler);	
 	//SPI_Init()
@@ -146,9 +146,12 @@ int main(void)
 	sdSemaphore = xSemaphoreCreateBinary();
 	onOffSemaphore = xSemaphoreCreateBinary();
 	
+    USART_WriteString("Hello world!\r\n");	
+    
 	sdTimer = xTimerCreate("Timerek", 1000, pdTRUE, (void*)0, timerFunction);
 	xTimerStart(sdTimer, 0);
 	
+    USART_WriteString("Timer init finished\r\n");	
 	
 //	if (pdPASS != xTaskCreate(taskOnOff, "Start and Finish logic", configMINIMAL_STACK_SIZE * 4, NULL, 3, NULL)) 
 //	{
