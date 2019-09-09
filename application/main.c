@@ -148,9 +148,6 @@ int main(void)
 	//Fatfs_init()
 	MX_TIM6_Init(); //TIM6 Init call
 	
-	  HAL_NVIC_SetPriority(TIM6_DAC_IRQn, 1, 1);
-    HAL_NVIC_EnableIRQ(TIM6_DAC_IRQn);
-	
 	adcSemaphore = xSemaphoreCreateBinary();
 	sdSemaphore = xSemaphoreCreateBinary();
 	onOffSemaphore = xSemaphoreCreateBinary();
@@ -242,7 +239,7 @@ void MX_TIM6_Init(void)
   htim6.Instance = TIM6;
   htim6.Init.Prescaler = 60000;
   htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim6.Init.Period = 2800;
+  htim6.Init.Period = 280;
   if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
   {
 		USART_WriteString("ERR");		
@@ -258,6 +255,9 @@ void MX_TIM6_Init(void)
 	{
 		USART_WriteString("KK");		
 	}
+	HAL_NVIC_SetPriority(TIM6_DAC_IRQn, 1, 1);
+  HAL_NVIC_EnableIRQ(TIM6_DAC_IRQn);
+	
 }
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
