@@ -16,6 +16,7 @@
 #include "exti2.h"
 #include "wav.h"
 #include "timers.h"
+#include "stm32f4xx_hal_tim.h"
 
 #define BUFFER_SIZE 256 // uint16 from adc
 
@@ -23,6 +24,7 @@
 // FIL myFILE; //file object
 
 TimerHandle_t sdTimer;
+TIM_HandleTypeDef htim6;
 
 static uint8_t adcState;
 SemaphoreHandle_t onOffSemaphore;
@@ -131,28 +133,111 @@ void taskBufferToSD(void* params)
 	}
 }
 
+void systickInit (uint16_t frequency)
+{
+   SysTick_Config (168000000 / frequency);
+}
 
+void TIM6_DAC_IRQHandler()
+{
+    HAL_TIM_IRQHandler(&htim6);
+}
+
+void MX_TIM6_Init(void)
+{
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+ __TIM6_CLK_ENABLE();
+
+  htim6.Instance = TIM6;
+  htim6.Init.Prescaler = 60000;
+  htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim6.Init.Period = 14;
+  if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
+  {
+		USART_WriteString("ERR");		
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim6, &sMasterConfig) != HAL_OK)
+  {
+		USART_WriteString("ERR");		
+  }
+	
+    if(HAL_TIM_Base_Start_IT(&htim6) == HAL_OK)
+	{
+		USART_WriteString("KK");		
+	}
+	HAL_NVIC_SetPriority(TIM6_DAC_IRQn, 1, 1);
+  HAL_NVIC_EnableIRQ(TIM6_DAC_IRQn);
+	
+}
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+	if(htim->Instance == TIM6)
+	{ // Jezeli przerwanie pochodzi od timera 10
+		HAL_GPIO_TogglePin(GPIOG, GPIO_PIN_14);
+        sdcard_systick_timerproc();
+        
+  }
+}
 
 int main(void)
 {
 	HAL_Init();
 	SystemClock_Config();
-  LED_Init();
-  USART_Init();
-  TRACE_Init();
+    LED_Init();
+    USART_Init();
+    TRACE_Init();
 	EXTI2_Init();	
 	ADC1_Init(adc1Handler);	
 	//SPI_Init()
 	//Fatfs_init()
-	
+	MX_TIM6_Init();
+    
 	adcSemaphore = xSemaphoreCreateBinary();
 	sdSemaphore = xSemaphoreCreateBinary();
 	onOffSemaphore = xSemaphoreCreateBinary();
 	
-	sdTimer = xTimerCreate("Timerek", 1000, pdTRUE, (void*)0, timerFunction);
-	xTimerStart(sdTimer, 0);
+    USART_WriteString("Hello world!!\r\n");	
+    
+//    HAL_SYSTICK_Config();
+    
+//	sdTimer = xTimerCreate("Timerek", 1000, pdTRUE, (void*)0, timerFunction);
+//	xTimerStart(sdTimer, 0);
 	
-	
+//    HAL_TIM_Base_Start_IT(&htim10);
+//    
+	USART_WriteString("Finished timer init \r\n");	
+    
+    FRESULT fresult;
+    FIL plik;
+    UINT zapisanych_bajtow;
+    
+    FATFS mynewdiskFatFs; 
+    char mynewdiskPath[4];
+    
+    fresult = f_mount(&mynewdiskFatFs, (TCHAR const*)mynewdiskPath, 0);
+  
+    if(fresult != FR_OK){
+        USART_WriteString("Error while mounting \r\n");
+    }
+  
+    // Tworzenie pliku
+    fresult = f_open (&plik,"plik.txt", FA_CREATE_ALWAYS);
+    fresult = f_close (&plik);
+
+    // Tworzenie katalogu
+    fresult = f_mkdir("katalog1");
+
+    // Zapis pliku
+    fresult = f_open (&plik,"plik.txt", FA_WRITE);
+    fresult = f_write(&plik, "zawartosc pliku", 15, &zapisanych_bajtow);
+    fresult = f_close (&plik);
+    
+    USART_WriteString("Writing finished \r\n");	
+    
 //	if (pdPASS != xTaskCreate(taskOnOff, "Start and Finish logic", configMINIMAL_STACK_SIZE * 4, NULL, 3, NULL)) 
 //	{
 //		USART_WriteString("ON/OFF TASK ERROR.\n\r");
@@ -168,7 +253,10 @@ int main(void)
 //		USART_WriteString("SD TASK ERROR.\n\r");
 //	}
 	
-  vTaskStartScheduler();
+  //vTaskStartScheduler();
+  
+  volatile uint8_t index = 0;
+  while(index == 0);
 }
 
 void SystemClock_Config(void) 
@@ -203,11 +291,6 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
   HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5);
-}
- 
-void timerFunction(void)
-{
-		HAL_GPIO_TogglePin(GPIOG, GPIO_PIN_14);
 }
 
 /**

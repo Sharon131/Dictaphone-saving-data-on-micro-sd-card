@@ -533,11 +533,11 @@ void disk_timerproc(void) {
 volatile unsigned short int sdcard_timer;
 
 void inline sdcard_systick_timerproc(void) {
-	++sdcard_timer;
-	if (sdcard_timer >= 100) {
-		sdcard_timer = 0;
+//	++sdcard_timer;
+//	if (sdcard_timer >= 100) {
+//		sdcard_timer = 0;
 		disk_timerproc();
-	}
+//	}
 }
 
 /*---------------------------------------------------------*/
