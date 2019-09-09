@@ -13,12 +13,16 @@
 #include "exti2.h"
 #include "wav.h"
 #include "timers.h"
+#include "stm32f4xx_hal_tim.h"
 
 #define BUFFER_SIZE 256 // uint16 from adc
 
 //FATFS myFATFS; //fatfs object
 // FIL myFILE; //file object
 
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim);
+TIM_HandleTypeDef htim6;
+void MX_TIM6_Init(void);
 TimerHandle_t sdTimer;
 
 static uint8_t adcState;
@@ -33,7 +37,8 @@ uint16_t dataToSd[BUFFER_SIZE]; // SD card takes 512 bytes at one time
 
 void SystemClock_Config(void); // 180 MHz clock from 8 MHz XTAL and PLL
 
-void timerFunction(void);
+void timerFunction(void* params);
+
 
 void taskOnOff(void* params)
 {
@@ -141,13 +146,17 @@ int main(void)
 	ADC1_Init(adc1Handler);	
 	//SPI_Init()
 	//Fatfs_init()
+	MX_TIM6_Init(); //TIM6 Init call
+	
+	  HAL_NVIC_SetPriority(TIM6_DAC_IRQn, 1, 1);
+    HAL_NVIC_EnableIRQ(TIM6_DAC_IRQn);
 	
 	adcSemaphore = xSemaphoreCreateBinary();
 	sdSemaphore = xSemaphoreCreateBinary();
 	onOffSemaphore = xSemaphoreCreateBinary();
 	
-	sdTimer = xTimerCreate("Timerek", 1000, pdTRUE, (void*)0, timerFunction);
-	xTimerStart(sdTimer, 0);
+	//sdTimer = xTimerCreate("Timerek", 100, pdTRUE, (void*)0, timerFunction);
+	//xTimerStart(sdTimer, 0);
 	
 	
 	if (pdPASS != xTaskCreate(taskOnOff, "Start and Finish logic", configMINIMAL_STACK_SIZE * 4, NULL, 3, NULL)) 
@@ -201,7 +210,7 @@ void SystemClock_Config(void)
   HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5);
 }
  
-void timerFunction(void)
+void timerFunction(void* params)
 {
 		HAL_GPIO_TogglePin(GPIOG, GPIO_PIN_14);
 }
@@ -217,4 +226,44 @@ void EXTI2_IRQHandler(void)
 		__HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_2);			// Clear the interrupt (has to be done for EXTI)
 		xSemaphoreGiveFromISR(onOffSemaphore, NULL);	
     }
+}
+
+void TIM6_DAC_IRQHandler()
+{
+    HAL_TIM_IRQHandler(&htim6);
+}
+
+void MX_TIM6_Init(void)
+{
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+ __TIM6_CLK_ENABLE();
+
+  htim6.Instance = TIM6;
+  htim6.Init.Prescaler = 60000;
+  htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim6.Init.Period = 2800;
+  if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
+  {
+		USART_WriteString("ERR");		
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim6, &sMasterConfig) != HAL_OK)
+  {
+		USART_WriteString("ERR");		
+  }
+	
+		if(HAL_TIM_Base_Start_IT(&htim6) == HAL_OK)
+	{
+		USART_WriteString("KK");		
+	}
+}
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+	if(htim->Instance == TIM6)
+	{ // Jezeli przerwanie pochodzi od timera 10
+		HAL_GPIO_TogglePin(GPIOG, GPIO_PIN_14);
+  }
 }
