@@ -1,4 +1,7 @@
 #include "stm32f4xx_hal.h"
+#include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
 #include "led.h"
 #include "usart.h"
 #include "FreeRTOS.h"
@@ -9,50 +12,167 @@
 #include "ff.h"
 #include "diskio.h"
 #include "sd_stm32.h"
+#include "adc1.h"
+#include "exti2.h"
+#include "wav.h"
+#include "timers.h"
 
-extern volatile int tick_counter;
-int executionTime = 0;
-SemaphoreHandle_t mySemaphore;
-SemaphoreHandle_t myMutex;
-QueueHandle_t myQueue;
+#define BUFFER_SIZE 256 // uint16 from adc
 
-typedef struct {
-        GPIO_TypeDef* gpio;    // GPIO port
-        uint16_t      pin;     // GPIO pin
-        TickType_t    ticks;   // delay expressed in system ticks
-} BlinkParams;
+//FATFS myFATFS; //fatfs object
+// FIL myFILE; //file object
 
+TimerHandle_t sdTimer;
 
-static BlinkParams bp1 = { .gpio = GPIOG, .pin = GPIO_PIN_13, .ticks = 500};
-static BlinkParams bp2 = { .gpio = GPIOG, .pin = GPIO_PIN_14, .ticks = 1000};
-static BlinkParams bp3 = { .gpio = GPIOG, .pin = GPIO_PIN_14, .ticks = 1000};
-static BlinkParams buttonp = { .gpio = GPIOG, .pin = GPIO_PIN_14, .ticks = 100};
+static uint8_t adcState;
+SemaphoreHandle_t onOffSemaphore;
+SemaphoreHandle_t adcSemaphore;
+SemaphoreHandle_t sdSemaphore;
 
-void CLI_Init(void);
-void SystemClock_Config(void);
+WaveFile *wavHandler;
+ADC_HandleTypeDef *adc1Handler;			 // handle for ADC1
 
-static void EXTI2_Init(void);
-void EXTI2_IRQHandler(void);
-void USART_POLL_WriteString(const char *string);
+uint16_t dataToSd[BUFFER_SIZE]; // SD card takes 512 bytes at one time
 
+void SystemClock_Config(void); // 180 MHz clock from 8 MHz XTAL and PLL
 
-int main(void)
+void timerFunction(void);
+
+void taskOnOff(void* params)
 {
-  HAL_Init();
-	SystemClock_Config();
-  LED_Init();
-	EXTI2_Init();	
-	TimerInit();
+	static uint8_t fileCounter; // 10 .wav files maximum
 	
-	
-	
-	while(1){
-		;
+  while (1) 
+	{
+		if(xSemaphoreTake(onOffSemaphore, portMAX_DELAY) == pdTRUE)
+		{	
+			HAL_GPIO_TogglePin(GPIOG, GPIO_PIN_14);	  // Toggle LED red 			
+			adcState = adcState ^ 1; 			// State switches between
+																		//1 - rising edge and 0 - falling edge of exti irq	
+			if(adcState) // dictaphone ON!
+			{	
+				xSemaphoreGive(adcSemaphore);
+//				if(f_mount(&myFATFS, SD_Path, 1) == FR_OK)
+//				{
+//					char myPath[] = "file0.wav";
+//					myPath[4] = fileCounter;
+//					f_open(&myFILE, myPath, F_WRITE);
+//					
+//					
+//					
+//					wavHandler = &(makeWave(ADC1_Get_sampleRate(adc1Handler),
+//																						ADC1_Get_numChannels(adc1Handler),
+//																						ADC1_Get_bitsPerSample(adc1Handler)));
+//					?? f_write(wavHandler)
+//				}
+			
+			}
+			else // dictaphone OFF! 
+			{
+//				f_close(myFILE)
+//				fileCounter++;
+			}
+		}
+	}
+}
+
+void taskADCtoBuffer(void* params)
+{
+	static uint32_t counter;
+  while (1) 
+	{	 
+		if(xSemaphoreTake(adcSemaphore, 1) == pdTRUE)
+		{				
+			vTaskSuspendAll();
+			//taskENTER_CRITICAL();	
+			//ADC1_Start(adc1Handler);
+			
+			USART_WriteString("T");		
+		
+			//dataToSd[counter] = (uint16_t)ADC1_Get_Value(adc1Handler);;
+			counter += 1;
+			if(counter == BUFFER_SIZE - 1)
+			{
+				counter = 0;
+				xSemaphoreGive(sdSemaphore);
+			}
+			if(adcState)
+			{
+				xSemaphoreGive(adcSemaphore);
+			}
+			else
+			{
+				//ADC1_Stop(adc1Handler);
+				xSemaphoreGive(sdSemaphore);
+			}				
+			//taskEXIT_CRITICAL();
+			xTaskResumeAll();
+		}	
+	}			
+} 
+
+void taskBufferToSD(void* params)
+{
+  while (1) 
+	{  			
+		if(xSemaphoreTake(sdSemaphore, portMAX_DELAY) == pdTRUE)
+		{	
+			// 512 bytes were received successfully
+			vTaskSuspendAll();			
+			taskENTER_CRITICAL();		
+			USART_WriteString("\n\rELO\n\r");	
+			taskEXIT_CRITICAL();
+			xTaskResumeAll();
+			//for (i = 0 i < BUFFER_SIZE, i++)
+			//addWaveSample (dataToSD[i])
+			//f_write dataToSD	
+			//memset(dataToSd, 0, sizeof(dataToSd));
+		}			
 	}
 }
 
 
-void SystemClock_Config(void) {
+
+int main(void)
+{
+	HAL_Init();
+	SystemClock_Config();
+  LED_Init();
+  USART_Init();
+  TRACE_Init();
+	EXTI2_Init();	
+	ADC1_Init(adc1Handler);	
+	//SPI_Init()
+	//Fatfs_init()
+	
+	adcSemaphore = xSemaphoreCreateBinary();
+	sdSemaphore = xSemaphoreCreateBinary();
+	onOffSemaphore = xSemaphoreCreateBinary();
+	
+	sdTimer = xTimerCreate("Timerek", 1000, pdTRUE, (void*)0, timerFunction);
+	xTimerStart(sdTimer, 0);
+	
+	
+//	if (pdPASS != xTaskCreate(taskOnOff, "Start and Finish logic", configMINIMAL_STACK_SIZE * 4, NULL, 3, NULL)) 
+//	{
+//		USART_WriteString("ON/OFF TASK ERROR.\n\r");
+//	}
+//	
+//	if (pdPASS != xTaskCreate(taskADCtoBuffer, "ADC to Buffer", configMINIMAL_STACK_SIZE * 4, NULL, 2, NULL)) 
+//	{
+//		USART_WriteString("ADC TASK ERROR.\n\r");
+//	}
+//	
+//	if (pdPASS != xTaskCreate(taskBufferToSD, "Buffer to SD", configMINIMAL_STACK_SIZE * 4, NULL, 3, NULL)) 
+//	{
+//		USART_WriteString("SD TASK ERROR.\n\r");
+//	}
+	
+  vTaskStartScheduler();
+}
+
+void SystemClock_Config(void) 
+{	
   RCC_OscInitTypeDef RCC_OscInitStruct;
   RCC_ClkInitTypeDef RCC_ClkInitStruct;
  
@@ -84,43 +204,21 @@ void SystemClock_Config(void) {
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
   HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5);
 }
-
-/**
- * Configures EXTI Line2 (connected to PG2 pin) in interrupt mode
- */
-static void EXTI2_Init(void)
+ 
+void timerFunction(void)
 {
-  GPIO_InitTypeDef  GPIO_InitStructure;
-        
-  // Enable GPIOG clock
-  __GPIOG_CLK_ENABLE();
-  
-  // Configure PG2 pin as input with EXTI interrupt on the falling edge and pull-up
-  GPIO_InitStructure.Speed = GPIO_SPEED_LOW;
-  GPIO_InitStructure.Mode = GPIO_MODE_IT_RISING_FALLING;
-  GPIO_InitStructure.Pull = GPIO_PULLUP;
-  GPIO_InitStructure.Pin = GPIO_PIN_2;
-  HAL_GPIO_Init(GPIOG, &GPIO_InitStructure);
- 
-        
-  // Enable and set EXTI Line2 Interrupt to the lowest priority
-  HAL_NVIC_SetPriority(EXTI2_IRQn, 15, 0);
-  HAL_NVIC_EnableIRQ(EXTI2_IRQn);
+		HAL_GPIO_TogglePin(GPIOG, GPIO_PIN_14);
 }
- 
+
 /**
  * This function handles External line 2 interrupt request.
  */
 void EXTI2_IRQHandler(void)
 {	
-	
   // Check if EXTI line interrupt was detected
   if(__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_2) != RESET)  
 	{
-    // Clear the interrupt (has to be done for EXTI)
-    __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_2);
-		HAL_GPIO_TogglePin(GPIOG, GPIO_PIN_14);
-    // Toggle LED   
-		xSemaphoreGiveFromISR(mySemaphore, NULL);
-  }
+		__HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_2);			// Clear the interrupt (has to be done for EXTI)
+		xSemaphoreGiveFromISR(onOffSemaphore, NULL);	
+    }
 }
