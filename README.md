@@ -5,7 +5,7 @@
 Final project from Microcontrollers' Applications on Electronics faculty. It uses STM32F429ZI board.
 
 ## Status
-Project is currently being developed.
+Project is currently not developed.
 
 ## Licence
 Feel free to use.
